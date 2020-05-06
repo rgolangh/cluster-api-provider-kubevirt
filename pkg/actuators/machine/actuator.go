@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
-	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
+	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -41,14 +41,14 @@ const (
 type Actuator struct {
 	client           runtimeclient.Client
 	eventRecorder    record.EventRecorder
-	awsClientBuilder awsclient.AwsClientBuilderFuncType
+	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
 
 // ActuatorParams holds parameter information for Actuator.
 type ActuatorParams struct {
 	Client           runtimeclient.Client
 	EventRecorder    record.EventRecorder
-	AwsClientBuilder awsclient.AwsClientBuilderFuncType
+	KubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
 
 // NewActuator returns an actuator.
@@ -56,7 +56,7 @@ func NewActuator(params ActuatorParams) *Actuator {
 	return &Actuator{
 		client:           params.Client,
 		eventRecorder:    params.EventRecorder,
-		awsClientBuilder: params.AwsClientBuilder,
+		kubevirtClientBuilder: params.KubevirtClientBuilder,
 	}
 }
 
@@ -77,7 +77,7 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 		Context:          ctx,
 		client:           a.client,
 		machine:          machine,
-		awsClientBuilder: a.awsClientBuilder,
+		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
@@ -102,7 +102,7 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 		Context:          ctx,
 		client:           a.client,
 		machine:          machine,
-		awsClientBuilder: a.awsClientBuilder,
+		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
 		return false, fmt.Errorf(scopeFailFmt, machine.GetName(), err)
@@ -117,7 +117,7 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 		Context:          ctx,
 		client:           a.client,
 		machine:          machine,
-		awsClientBuilder: a.awsClientBuilder,
+		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
@@ -155,7 +155,7 @@ func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error
 		Context:          ctx,
 		client:           a.client,
 		machine:          machine,
-		awsClientBuilder: a.awsClientBuilder,
+		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
