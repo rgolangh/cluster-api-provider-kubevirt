@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
+
 	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -39,23 +40,23 @@ const (
 
 // Actuator is responsible for performing machine reconciliation.
 type Actuator struct {
-	client           runtimeclient.Client
-	eventRecorder    record.EventRecorder
+	client                runtimeclient.Client
+	eventRecorder         record.EventRecorder
 	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
 
 // ActuatorParams holds parameter information for Actuator.
 type ActuatorParams struct {
-	Client           runtimeclient.Client
-	EventRecorder    record.EventRecorder
+	Client                runtimeclient.Client
+	EventRecorder         record.EventRecorder
 	KubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
 
 // NewActuator returns an actuator.
 func NewActuator(params ActuatorParams) *Actuator {
 	return &Actuator{
-		client:           params.Client,
-		eventRecorder:    params.EventRecorder,
+		client:                params.Client,
+		eventRecorder:         params.EventRecorder,
 		kubevirtClientBuilder: params.KubevirtClientBuilder,
 	}
 }
@@ -74,9 +75,9 @@ func (a *Actuator) handleMachineError(machine *machinev1.Machine, err error, eve
 func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator creating machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:          ctx,
-		client:           a.client,
-		machine:          machine,
+		Context:               ctx,
+		client:                a.client,
+		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
@@ -99,9 +100,9 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool, error) {
 	klog.Infof("%s: actuator checking if machine exists", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:          ctx,
-		client:           a.client,
-		machine:          machine,
+		Context:               ctx,
+		client:                a.client,
+		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
@@ -114,9 +115,9 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator updating machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:          ctx,
-		client:           a.client,
-		machine:          machine,
+		Context:               ctx,
+		client:                a.client,
+		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {
@@ -152,9 +153,9 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator deleting machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:          ctx,
-		client:           a.client,
-		machine:          machine,
+		Context:               ctx,
+		client:                a.client,
+		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
 	if err != nil {

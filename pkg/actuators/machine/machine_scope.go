@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
+
 	"github.com/aws/aws-sdk-go/service/ec2"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
-	awsproviderv1 "sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsprovider/v1beta1"
-	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -22,7 +22,7 @@ const (
 type machineScopeParams struct {
 	context.Context
 
-	awsClientBuilder awsclient.AwsClientBuilderFuncType
+	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 	// api server controller runtime client
 	client runtimeclient.Client
 	// machine resource
@@ -33,14 +33,14 @@ type machineScope struct {
 	context.Context
 
 	// client for interacting with AWS
-	awsClient awsclient.Client
+	kubevirtClient kubevirtclient.Client
 	// api server controller runtime client
 	client runtimeclient.Client
 	// machine resource
 	machine            *machinev1.Machine
 	machineToBePatched runtimeclient.Patch
-	providerSpec       *awsproviderv1.AWSMachineProviderConfig
-	providerStatus     *awsproviderv1.AWSMachineProviderStatus
+	providerSpec       string //*awsproviderv1.AWSMachineProviderConfig
+	providerStatus     string //*awsproviderv1.AWSMachineProviderStatus
 }
 
 func newMachineScope(params machineScopeParams) (*machineScope, error) {
@@ -54,19 +54,15 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	credentialsSecretName := ""
-	if providerSpec.CredentialsSecret != nil {
-		credentialsSecretName = providerSpec.CredentialsSecret.Name
-	}
-
-	awsClient, err := params.awsClientBuilder(params.client, credentialsSecretName, params.machine.Namespace, providerSpec.Placement.Region)
+	//(client kubecli.KubevirtClient, namespace, region string) returns:Client
+	kubeClient, err := params.kubevirtClientBuilder(params.client, params.machine.Namespace)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aws client: %v", err.Error())
 	}
 
 	return &machineScope{
 		Context:            params.Context,
-		awsClient:          awsClient,
+		kubevirtClient:     kubeClient,
 		client:             params.client,
 		machine:            params.machine,
 		machineToBePatched: runtimeclient.MergeFrom(params.machine.DeepCopy()),

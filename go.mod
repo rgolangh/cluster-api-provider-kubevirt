@@ -1,4 +1,4 @@
-module sigs.k8s.io/cluster-api-provider-aws
+module sigs.k8s.io/cluster-api-provider-kubevirt
 
 go 1.13
 
@@ -6,11 +6,12 @@ require (
 	github.com/aws/aws-sdk-go v1.15.66
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/go-logr/logr v0.1.0
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.2.0
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20200417151930-302867dc433b
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.8.1
 	github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3
-	github.com/pkg/errors v0.8.1
 
 	// kube 1.18
 	k8s.io/api v0.18.0
