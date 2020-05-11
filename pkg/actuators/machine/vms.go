@@ -13,11 +13,11 @@ import (
 	mapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	"k8s.io/klog"
 	awsproviderv1 "sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsprovider/v1beta1"
+	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-
-	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
+	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
 )
 
 // Scan machine tags, and return a deduped tags list
@@ -140,6 +140,7 @@ func getSubnetIDs(subnet awsproviderv1.AWSResourceReference, availabilityZone st
 }
 
 func getAMI(AMI awsproviderv1.AWSResourceReference, client awsclient.Client) (*string, error) {
+	kubevirtclient.Client()
 	if AMI.ID != nil {
 		amiID := AMI.ID
 		klog.Infof("Using AMI %s", *amiID)
@@ -228,7 +229,7 @@ func getBlockDeviceMappings(blockDeviceMappings []awsproviderv1.BlockDeviceMappi
 	return []*ec2.BlockDeviceMapping{&blockDeviceMapping}, nil
 }
 
-func launchInstance(machine *machinev1.Machine, machineProviderConfig *awsproviderv1.AWSMachineProviderConfig, userData []byte, client awsclient.Client) (*ec2.Instance, error) {
+func createVm(machine *machinev1.Machine, machineProviderConfig *awsproviderv1.AWSMachineProviderConfig, userData []byte, client awsclient.Client) (*ec2.Instance, error) {
 	amiID, err := getAMI(machineProviderConfig.AMI, client)
 	if err != nil {
 		return nil, mapierrors.InvalidMachineConfiguration("error getting AMI: %v", err)
