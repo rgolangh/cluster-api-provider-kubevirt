@@ -16,13 +16,13 @@ limitations under the License.
 
 // NOTE: Boilerplate only.  Ignore this file.
 
-// Package v1beta1 contains API Schema definitions for the awsproviderconfig v1beta1 API group
+// Package v1 contains API Schema definitions for the kubevirtproviderconfig v1 API group
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package,register
-// +k8s:conversion-gen=sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsproviderconfig
+// +k8s:conversion-gen=sigs.k8s.io/cluster-api-provider-kubevirt/pkg/apis/kubevirtproviderconfig
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=awsproviderconfig.k8s.io
-package v1beta1
+package v1
 
 import (
 	"encoding/json"
@@ -37,14 +37,14 @@ import (
 
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "awsproviderconfig.openshift.io", Version: "v1beta1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "kubevirtproviderconfig.openshift.io", Version: "v1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
 )
 
 // RawExtensionFromProviderSpec marshals the machine provider spec.
-func RawExtensionFromProviderSpec(spec *AWSMachineProviderConfig) (*runtime.RawExtension, error) {
+func RawExtensionFromProviderSpec(spec *KubevirtMachineProviderSpec) (*runtime.RawExtension, error) {
 	if spec == nil {
 		return &runtime.RawExtension{}, nil
 	}
@@ -61,7 +61,7 @@ func RawExtensionFromProviderSpec(spec *AWSMachineProviderConfig) (*runtime.RawE
 }
 
 // RawExtensionFromProviderStatus marshals the machine provider status
-func RawExtensionFromProviderStatus(status *AWSMachineProviderStatus) (*runtime.RawExtension, error) {
+func RawExtensionFromProviderStatus(status *KubevirtMachineProviderStatus) (*runtime.RawExtension, error) {
 	if status == nil {
 		return &runtime.RawExtension{}, nil
 	}
@@ -77,13 +77,13 @@ func RawExtensionFromProviderStatus(status *AWSMachineProviderStatus) (*runtime.
 	}, nil
 }
 
-// ProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type
-func ProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*AWSMachineProviderConfig, error) {
+// ProviderSpecFromRawExtension unmarshals a raw extension into an KubevirtMachineProviderSpec type
+func ProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*KubevirtMachineProviderSpec, error) {
 	if rawExtension == nil {
-		return &AWSMachineProviderConfig{}, nil
+		return &KubevirtMachineProviderSpec{}, nil
 	}
 
-	spec := new(AWSMachineProviderConfig)
+	spec := new(KubevirtMachineProviderSpec)
 	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
 		return nil, fmt.Errorf("error unmarshalling providerSpec: %v", err)
 	}
@@ -92,13 +92,13 @@ func ProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*AWSMachi
 	return spec, nil
 }
 
-// ProviderStatusFromRawExtension unmarshals a raw extension into an AWSMachineProviderStatus type
-func ProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (*AWSMachineProviderStatus, error) {
+// ProviderStatusFromRawExtension unmarshals a raw extension into an KubevirtMachineProviderStatus type
+func ProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (*KubevirtMachineProviderStatus, error) {
 	if rawExtension == nil {
-		return &AWSMachineProviderStatus{}, nil
+		return &KubevirtMachineProviderStatus{}, nil
 	}
 
-	providerStatus := new(AWSMachineProviderStatus)
+	providerStatus := new(KubevirtMachineProviderStatus)
 	if err := yaml.Unmarshal(rawExtension.Raw, providerStatus); err != nil {
 		return nil, fmt.Errorf("error unmarshalling providerStatus: %v", err)
 	}

@@ -17,10 +17,10 @@ limitations under the License.
 package apis
 
 import (
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsprovider/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
 )
 
 func init() {
 	// Register the types with the Scheme so the components can map objects to GroupVersionKinds and back
-	AddToSchemes = append(AddToSchemes, v1beta1.SchemeBuilder.AddToScheme)
+	AddToSchemes = append(AddToSchemes, v1.SchemeBuilder.AddToScheme)
 }

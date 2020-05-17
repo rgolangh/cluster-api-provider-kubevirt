@@ -29,6 +29,7 @@ import (
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	"k8s.io/klog"
+	kubevirtproviderv1 "kubevirt.io/client-go/api/v1"
 	awsproviderv1 "sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsprovider/v1beta1"
 	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
 )
@@ -40,11 +41,14 @@ const upstreamMachineClusterIDLabel = "sigs.k8s.io/cluster-api-cluster"
 // while being considered "existing", i.e. mostly anything but "Terminated".
 func existingInstanceStates() []*string {
 	return []*string{
-		aws.String(ec2.InstanceStateNameRunning),
-		aws.String(ec2.InstanceStateNamePending),
-		aws.String(ec2.InstanceStateNameStopped),
-		aws.String(ec2.InstanceStateNameStopping),
-		aws.String(ec2.InstanceStateNameShuttingDown),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.VmPhaseUnset),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Pending),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Scheduling),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Scheduled),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Running),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Succeeded),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Failed),
+		kubevirtproviderv1.VirtualMachineInstancePhaseToString(kubevirtproviderv1.Unknown),
 	}
 }
 
@@ -201,13 +205,13 @@ func terminateInstances(client awsclient.Client, instances []*ec2.Instance) ([]*
 	return output.TerminatingInstances, nil
 }
 
-// setAWSMachineProviderCondition sets the condition for the machine and
+// setKubevirtMachineProviderCondition sets the condition for the machine and
 // returns the new slice of conditions.
 // If the machine does not already have a condition with the specified type,
 // a condition will be added to the slice
 // If the machine does already have a condition with the specified type,
 // the condition will be updated if either of the following are true.
-func setAWSMachineProviderCondition(condition awsproviderv1.AWSMachineProviderCondition, conditions []awsproviderv1.AWSMachineProviderCondition) []awsproviderv1.AWSMachineProviderCondition {
+func setKubevirtMachineProviderCondition(condition kubevirtproviderv1.VirtualMachineCondition, conditions []kubevirtproviderv1.VirtualMachineCondition) []kubevirtproviderv1.VirtualMachineCondition {
 	now := metav1.Now()
 
 	if existingCondition := findProviderCondition(conditions, condition.Type); existingCondition == nil {
@@ -221,7 +225,7 @@ func setAWSMachineProviderCondition(condition awsproviderv1.AWSMachineProviderCo
 	return conditions
 }
 
-func findProviderCondition(conditions []awsproviderv1.AWSMachineProviderCondition, conditionType awsproviderv1.AWSMachineProviderConditionType) *awsproviderv1.AWSMachineProviderCondition {
+func findProviderCondition(conditions []kubevirtproviderv1.VirtualMachineCondition, conditionType kubevirtproviderv1.VirtualMachineConditionType) *kubevirtproviderv1.VirtualMachineCondition {
 	for i := range conditions {
 		if conditions[i].Type == conditionType {
 			return &conditions[i]
@@ -230,7 +234,7 @@ func findProviderCondition(conditions []awsproviderv1.AWSMachineProviderConditio
 	return nil
 }
 
-func updateExistingCondition(newCondition, existingCondition *awsproviderv1.AWSMachineProviderCondition) {
+func updateExistingCondition(newCondition, existingCondition *kubevirtproviderv1.VirtualMachineCondition) {
 	if !shouldUpdateCondition(newCondition, existingCondition) {
 		return
 	}
@@ -244,87 +248,83 @@ func updateExistingCondition(newCondition, existingCondition *awsproviderv1.AWSM
 	existingCondition.LastProbeTime = newCondition.LastProbeTime
 }
 
-func shouldUpdateCondition(newCondition, existingCondition *awsproviderv1.AWSMachineProviderCondition) bool {
+func shouldUpdateCondition(newCondition, existingCondition *kubevirtproviderv1.VirtualMachineCondition) bool {
 	return newCondition.Reason != existingCondition.Reason || newCondition.Message != existingCondition.Message
 }
 
+// TODO Nir do we need to extract node adresses?
+// The network info is saved in the vmi
 // extractNodeAddresses maps the instance information from EC2 to an array of NodeAddresses
-func extractNodeAddresses(instance *ec2.Instance) ([]corev1.NodeAddress, error) {
+func extractNodeAddresses(vm *kubevirtproviderv1.VirtualMachine) ([]corev1.NodeAddress, error) {
 	// Not clear if the order matters here, but we might as well indicate a sensible preference order
 
-	if instance == nil {
-		return nil, fmt.Errorf("nil instance passed to extractNodeAddresses")
+	if vm == nil {
+		return nil, fmt.Errorf("nil vm passed to extractNodeAddresses")
 	}
 
 	addresses := []corev1.NodeAddress{}
 
 	// handle internal network interfaces
-	for _, networkInterface := range instance.NetworkInterfaces {
-		// skip network interfaces that are not currently in use
-		if aws.StringValue(networkInterface.Status) != ec2.NetworkInterfaceStatusInUse {
-			continue
-		}
+	for _, networkInterface := range vm.Status. {
+		// TODO Nir - In kubevirt there is not network state and IPV6
+		// // skip network interfaces that are not currently in use
+		// if aws.StringValue(networkInterface.Status) != ec2.NetworkInterfaceStatusInUse {
+		// 	continue
+		// }
 
-		// Treating IPv6 addresses as type NodeInternalIP to match what the KNI
-		// patch to the AWS cloud-provider code is doing:
-		//
-		// https://github.com/openshift-kni/origin/commit/7db21c1e26a344e25ae1b825d4f21e7bef5c3650
-		for _, ipv6Address := range networkInterface.Ipv6Addresses {
-			if addr := aws.StringValue(ipv6Address.Ipv6Address); addr != "" {
-				ip := net.ParseIP(addr)
-				if ip == nil {
-					return nil, fmt.Errorf("EC2 instance had invalid IPv6 address: %s (%q)", aws.StringValue(instance.InstanceId), addr)
-				}
-				addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
-			}
-		}
+		// TODO Does kubevirt use IPV6?
+		// // Treating IPv6 addresses as type NodeInternalIP to match what the KNI
+		// // patch to the AWS cloud-provider code is doing:
+		// //
+		// // https://github.com/openshift-kni/origin/commit/7db21c1e26a344e25ae1b825d4f21e7bef5c3650
+		// for _, ipv6Address := range networkInterface.Ipv6Addresses {
+		// 	if addr := aws.StringValue(ipv6Address.Ipv6Address); addr != "" {
+		// 		ip := net.ParseIP(addr)
+		// 		if ip == nil {
+		// 			return nil, fmt.Errorf("EC2 instance had invalid IPv6 address: %s (%q)", aws.StringValue(instance.InstanceId), addr)
+		// 		}
+		// 		addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
+		// 	}
+		// }
 
-		for _, internalIP := range networkInterface.PrivateIpAddresses {
-			if ipAddress := aws.StringValue(internalIP.PrivateIpAddress); ipAddress != "" {
+		for _, ipAddress := range networkInterface.IPs {
+			if ipAddress != "" {
 				ip := net.ParseIP(ipAddress)
 				if ip == nil {
-					return nil, fmt.Errorf("EC2 instance had invalid private address: %s (%q)", aws.StringValue(instance.InstanceId), ipAddress)
+					return nil, fmt.Errorf("KubeVirt instance had invalid IP address: %s (%q)", string(instance.UID), ipAddress)
 				}
+				// TODO Nir - Modify NodeAddressType according to ip info (public, private, etc ...)
 				addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
 			}
 		}
 	}
 
-	// TODO: Other IP addresses (multiple ips)?
-	publicIPAddress := aws.StringValue(instance.PublicIpAddress)
-	if publicIPAddress != "" {
-		ip := net.ParseIP(publicIPAddress)
-		if ip == nil {
-			return nil, fmt.Errorf("EC2 instance had invalid public address: %s (%s)", aws.StringValue(instance.InstanceId), publicIPAddress)
-		}
-		addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: ip.String()})
-	}
+	// TODO Nir - Get DNS name, public and private
+	// privateDNSName := aws.StringValue(instance.PrivateDnsName)
+	// if privateDNSName != "" {
+	// 	addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalDNS, Address: privateDNSName})
+	// 	addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeHostName, Address: privateDNSName})
+	// }
 
-	privateDNSName := aws.StringValue(instance.PrivateDnsName)
-	if privateDNSName != "" {
-		addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalDNS, Address: privateDNSName})
-		addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeHostName, Address: privateDNSName})
-	}
-
-	publicDNSName := aws.StringValue(instance.PublicDnsName)
-	if publicDNSName != "" {
-		addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeExternalDNS, Address: publicDNSName})
-	}
+	// publicDNSName := aws.StringValue(instance.PublicDnsName)
+	// if publicDNSName != "" {
+	// 	addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeExternalDNS, Address: publicDNSName})
+	// }
 
 	return addresses, nil
 }
 
-func conditionSuccess() awsproviderv1.AWSMachineProviderCondition {
-	return awsproviderv1.AWSMachineProviderCondition{
-		Type:    awsproviderv1.MachineCreation,
+func conditionSuccess() kubevirtproviderv1.VirtualMachineInstanceCondition {
+	return kubevirtproviderv1.VirtualMachineInstanceCondition{
+		Type:    kubevirtproviderv1.VirtualMachineInstanceReady,
 		Status:  corev1.ConditionTrue,
-		Reason:  awsproviderv1.MachineCreationSucceeded,
+		Reason:  "MachineCreationSucceeded",
 		Message: "Machine successfully created",
 	}
 }
 
-func conditionFailed() awsproviderv1.AWSMachineProviderCondition {
-	return awsproviderv1.AWSMachineProviderCondition{
+func conditionFailed() kubevirtproviderv1.VirtualMachineInstanceCondition {
+	return kubevirtproviderv1.VirtualMachineInstanceCondition{
 		Type:   awsproviderv1.MachineCreation,
 		Status: corev1.ConditionFalse,
 		Reason: awsproviderv1.MachineCreationFailed,
