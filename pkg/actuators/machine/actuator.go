@@ -57,7 +57,7 @@ func NewActuator(params ActuatorParams) *Actuator {
 	return &Actuator{
 		client:         params.Client,
 		eventRecorder:  params.EventRecorder,
-		kubevirtClient: params.Client,
+		kubevirtClient: params.kubevirtClient,
 	}
 }
 
@@ -100,10 +100,10 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool, error) {
 	klog.Infof("%s: actuator checking if machine exists", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:               ctx,
-		client:                a.client,
-		machine:               machine,
-		kubevirtClientBuilder: a.kubevirtClientBuilder,
+		Context:        ctx,
+		client:         a.client,
+		machine:        machine,
+		kubevirtClient: a.kubevirtClient,
 	})
 	if err != nil {
 		return false, fmt.Errorf(scopeFailFmt, machine.GetName(), err)
@@ -115,10 +115,10 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator updating machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:               ctx,
-		client:                a.client,
-		machine:               machine,
-		kubevirtClientBuilder: a.kubevirtClientBuilder,
+		Context:        ctx,
+		client:         a.client,
+		machine:        machine,
+		kubevirtClient: a.kubevirtClient,
 	})
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
@@ -153,10 +153,10 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator deleting machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:               ctx,
-		client:                a.client,
-		machine:               machine,
-		kubevirtClientBuilder: a.kubevirtClientBuilder,
+		Context:        ctx,
+		client:         a.client,
+		machine:        machine,
+		kubevirtClient: a.kubevirtClient,
 	})
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
