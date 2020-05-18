@@ -18,34 +18,37 @@ package client
 
 import (
 	networkclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
-	"kubevirt.io/kubevirt/pkg/kubecli"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	v1 "kubevirt.io/client-go/api/v1"
 )
 
 //go:generate go run ../../vendor/github.com/golang/mock/mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 
 const (
 	kubeconfig = "kubeconfig"
+	secretName = ""
 )
 
 // KubevirtClientBuilderFuncType is function type for building kubevirt client
 type KubevirtClientBuilderFuncType func(client kubecli.KubevirtClient, namespace string) (Client, error){
-	secret, err := kubeClient.CoreV1().Secrets(namespace).Get(
-	secretName, metav1.GetOptions{})
-	kubeconfig = secret.value???
-	client = newkubevirtClient(kubeconfig)
-	return client
+	secret, err := kubeClient.CoreV1().Secrets(namespace).Get(secretName, metav1.GetOptions{})
+	//TODO: check that
+	kubeconfig = secret.value['kubeconfig']
+	optionalArgument = ""
+	virtclient, err = kubecli.GetKubevirtClientFromFlags(optionalArgument, kubeconfig)
+	return virtclient
 }
 
-// Client is a wrapper object for actual AWS SDK clients to allow for easier testing.
+// Client is a wrapper object for actual kubevirt clients: virtctl and the kubecli
 type Client interface {
+	CreateVirtualMachineInstance(namespace string, vmi kubecli.VirtualMachineInstance) (v1.VirtualMachineInstance, error)
+	CreateVirtualMachine(namespace string, vmi kubecli.VirtualMachine) (v1.VirtualMachine, error)
 	VirtualMachine(namespace string) kubecli.kubeVirtualMachineInterface
 	NetworkClient() networkclient.Interface
 }
 
 type kubevirtclient struct {
-	namespace string
+	kubeclient Client
+	virtctlclient string
 }
 
 func NewClientBuilder(kubeconfig string) (*ClientBuilder, error) {
@@ -65,6 +68,15 @@ func (c *kubevirtclient) VirtualMachine(namespace string) kubecli.VirtualMachine
 
 func (c *kubevirtclient) NetworkClient() networkclient.Interface {
 	return c.NetworkClient()
+}
+
+func (c *kubevirtclient) CreateVirtualMachineInstance(namespace string, vmi kubecli.VirtualMachineInstance) (v1.VirtualMachineInstance, error) {
+
+	return c.VirtualMachineInstance(namespace).Create(vmi)
+}
+
+func (c *kubevirtclient) CreateVirtualMachine(namespace string, newVM *v1.VirtualMachine) (*v1.VirtualMachine, error) {
+	return c.kubeclient.VirtualMachine(namespace).Create(newVM)
 }
 
 func NewClient(ctrlRuntimeClient client.Client, namespace string) Client {

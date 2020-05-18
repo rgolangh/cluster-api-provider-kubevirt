@@ -12,7 +12,7 @@ import (
 	errorutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog"
 	kubevirtapis "kubevirt.io/kubevirt/pkg/api/v1"
-	awsproviderv1 "sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsprovider/v1beta1"
+	kubevirtproviderv1 "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/apis/awsprovider/v1beta1"
 )
 
 const (
@@ -227,9 +227,9 @@ func (r *Reconciler) updateLoadBalancers(instance *ec2.Instance) error {
 	networkLoadBalancerNames := []string{}
 	for _, loadBalancerRef := range r.providerSpec.LoadBalancers {
 		switch loadBalancerRef.Type {
-		case awsproviderv1.NetworkLoadBalancerType:
+		case kubevirtproviderv1.NetworkLoadBalancerType:
 			networkLoadBalancerNames = append(networkLoadBalancerNames, loadBalancerRef.Name)
-		case awsproviderv1.ClassicLoadBalancerType:
+		case kubevirtproviderv1.ClassicLoadBalancerType:
 			classicLoadBalancerNames = append(classicLoadBalancerNames, loadBalancerRef.Name)
 		}
 	}
@@ -295,7 +295,7 @@ func (r *Reconciler) setMachineCloudProviderSpecifics(instance *ec2.Instance) er
 
 	// Reaching to machine provider config since the region is not directly
 	// providing by *ec2.Instance object
-	machineProviderConfig, err := awsproviderv1.ProviderSpecFromRawExtension(r.machine.Spec.ProviderSpec.Value)
+	machineProviderConfig, err := kubevirtproviderv1.ProviderSpecFromRawExtension(r.machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return fmt.Errorf("error decoding MachineProviderConfig: %w", err)
 	}

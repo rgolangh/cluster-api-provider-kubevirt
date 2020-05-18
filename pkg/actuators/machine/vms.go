@@ -4,21 +4,24 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	mapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	"k8s.io/klog"
 	awsproviderv1 "sigs.k8s.io/cluster-api-provider-aws/pkg/apis/awsprovider/v1beta1"
-	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
 	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
+
+	v1 "kubevirt.io/client-go/api/v1"
+	corev1 "k8s.io/api/core/v1"
 )
+
+// String returns a pointer to the string value passed in.
+func String(v string) *string {
+	return &v
+}
 
 // Scan machine tags, and return a deduped tags list
 func removeDuplicatedTags(tags []*ec2.Tag) []*ec2.Tag {
@@ -36,7 +39,7 @@ func removeDuplicatedTags(tags []*ec2.Tag) []*ec2.Tag {
 }
 
 // removeStoppedMachine removes all instances of a specific machine that are in a stopped state.
-func removeStoppedMachine(machine *machinev1.Machine, client awsclient.Client) error {
+func removeStoppedMachine(machine *machinev1.Machine, client kubevirtclient.Client) error {
 	instances, err := getStoppedInstances(machine, client)
 	if err != nil {
 		klog.Errorf("Error getting stopped instances: %v", err)
@@ -67,7 +70,7 @@ func buildEC2Filters(inputFilters []awsproviderv1.Filter) []*ec2.Filter {
 	return filters
 }
 
-func getSecurityGroupsIDs(securityGroups []awsproviderv1.AWSResourceReference, client awsclient.Client) ([]*string, error) {
+func getSecurityGroupsIDs(securityGroups []awsproviderv1.AWSResourceReference, client kubevirtclient.Client) ([]*string, error) {
 	var securityGroupIDs []*string
 	for _, g := range securityGroups {
 		// ID has priority
@@ -98,7 +101,7 @@ func getSecurityGroupsIDs(securityGroups []awsproviderv1.AWSResourceReference, c
 	return securityGroupIDs, nil
 }
 
-func getSubnetIDs(subnet awsproviderv1.AWSResourceReference, availabilityZone string, client awsclient.Client) ([]*string, error) {
+func getSubnetIDs(subnet awsproviderv1.AWSResourceReference, availabilityZone string, client kubevirtclient.Client) ([]*string, error) {
 	var subnetIDs []*string
 	// ID has priority
 	if subnet.ID != nil {
@@ -139,17 +142,16 @@ func getSubnetIDs(subnet awsproviderv1.AWSResourceReference, availabilityZone st
 	return subnetIDs, nil
 }
 
-func getAMI(AMI awsproviderv1.AWSResourceReference, client awsclient.Client) (*string, error) {
-	kubevirtclient.Client()
-	if AMI.ID != nil {
-		amiID := AMI.ID
-		klog.Infof("Using AMI %s", *amiID)
-		return amiID, nil
+func getPvcName(image awsproviderv1.AWSResourceReference, client kubevirtclient.Client) (*string, error) {
+	if image.ID != nil {
+		imageID := image.ID
+		klog.Infof("Using image %s", *imageID)
+		return imageID, nil
 	}
-	if len(AMI.Filters) > 0 {
+	if len(image.Filters) > 0 {
 		klog.Info("Describing AMI based on filters")
 		describeImagesRequest := ec2.DescribeImagesInput{
-			Filters: buildEC2Filters(AMI.Filters),
+			Filters: buildEC2Filters(image.Filters),
 		}
 		describeAMIResult, err := client.DescribeImages(&describeImagesRequest)
 		if err != nil {
@@ -181,169 +183,51 @@ func getAMI(AMI awsproviderv1.AWSResourceReference, client awsclient.Client) (*s
 	}
 	return nil, fmt.Errorf("AMI ID or AMI filters need to be specified")
 }
-
-func getBlockDeviceMappings(blockDeviceMappings []awsproviderv1.BlockDeviceMappingSpec, AMI string, client awsclient.Client) ([]*ec2.BlockDeviceMapping, error) {
-	if len(blockDeviceMappings) == 0 || blockDeviceMappings[0].EBS == nil {
-		return []*ec2.BlockDeviceMapping{}, nil
+func buildSpecVolume(pvcName string, userData []byte) []v1.Volume{
+	//TODO: move to machine_scope
+	userDataEnc := base64.StdEncoding.EncodeToString(userData)
+	return []v1.Volume{
+		//{
+		//	Name: "??",
+		//	VolumeSource: v1.VolumeSource{
+		//		ContainerDisk: &v1.ContainerDiskSource{
+		//			Image: "my-image",
+		//			Path:  "????",
+		//		},
+		//	},
+		//},
+		//
+		{
+			Name: "bootVolume0",
+			VolumeSource: v1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcName,
+				},
+			},
+		}
 	}
-
-	// Get image object to get the RootDeviceName
-	describeImagesRequest := ec2.DescribeImagesInput{
-		ImageIds: []*string{&AMI},
-	}
-	describeAMIResult, err := client.DescribeImages(&describeImagesRequest)
-	if err != nil {
-		klog.Errorf("Error describing AMI: %v", err)
-		return nil, fmt.Errorf("error describing AMI: %v", err)
-	}
-	if len(describeAMIResult.Images) < 1 {
-		klog.Errorf("No image for given AMI was found")
-		return nil, fmt.Errorf("no image for given AMI not found")
-	}
-	deviceName := describeAMIResult.Images[0].RootDeviceName
-
-	// Only support one blockDeviceMapping
-	volumeSize := blockDeviceMappings[0].EBS.VolumeSize
-	volumeType := blockDeviceMappings[0].EBS.VolumeType
-	blockDeviceMapping := ec2.BlockDeviceMapping{
-		DeviceName: deviceName,
-		Ebs: &ec2.EbsBlockDevice{
-			VolumeSize: volumeSize,
-			VolumeType: volumeType,
-			Encrypted:  blockDeviceMappings[0].EBS.Encrypted,
-		},
-	}
-
-	if aws.StringValue(blockDeviceMappings[0].EBS.KMSKey.ID) != "" {
-		klog.V(3).Infof("Using KMS key ID %q for encrypting EBS volume", *blockDeviceMappings[0].EBS.KMSKey.ID)
-		blockDeviceMapping.Ebs.KmsKeyId = blockDeviceMappings[0].EBS.KMSKey.ID
-	} else if aws.StringValue(blockDeviceMappings[0].EBS.KMSKey.ARN) != "" {
-		klog.V(3).Info("Using KMS key ARN for encrypting EBS volume") // ARN usually have account ids, therefore are sensitive data so shouldn't log the value
-		blockDeviceMapping.Ebs.KmsKeyId = blockDeviceMappings[0].EBS.KMSKey.ARN
-	}
-
-	if *volumeType == "io1" {
-		blockDeviceMapping.Ebs.Iops = blockDeviceMappings[0].EBS.Iops
-	}
-
-	return []*ec2.BlockDeviceMapping{&blockDeviceMapping}, nil
 }
 
-func createVm(machine *machinev1.Machine, machineProviderConfig *awsproviderv1.AWSMachineProviderConfig, userData []byte, client awsclient.Client) (*ec2.Instance, error) {
-	amiID, err := getAMI(machineProviderConfig.AMI, client)
-	if err != nil {
-		return nil, mapierrors.InvalidMachineConfiguration("error getting AMI: %v", err)
-	}
 
-	securityGroupsIDs, err := getSecurityGroupsIDs(machineProviderConfig.SecurityGroups, client)
-	if err != nil {
-		return nil, mapierrors.InvalidMachineConfiguration("error getting security groups IDs: %v", err)
-	}
-	subnetIDs, err := getSubnetIDs(machineProviderConfig.Subnet, machineProviderConfig.Placement.AvailabilityZone, client)
-	if err != nil {
-		return nil, mapierrors.InvalidMachineConfiguration("error getting subnet IDs: %v", err)
-	}
-	if len(subnetIDs) > 1 {
-		klog.Warningf("More than one subnet id returned, only first one will be used")
-	}
+func createVm(machine *machinev1.Machine, machineProviderConfig *kubevirtproviderv1.KubeVirtMachineProviderConfig, userData []byte, client kubevirtclient.Client) (*v1.VirtualMachine, error) {
+	//pvcName, err := getPvcName(machineProviderConfig.image, client)
+	//if err != nil {
+	//	return nil, mapierrors.InvalidMachineConfiguration("error getting AMI: %v", err)
+	//}
 
-	// build list of networkInterfaces (just 1 for now)
-	var networkInterfaces = []*ec2.InstanceNetworkInterfaceSpecification{
-		{
-			DeviceIndex:              aws.Int64(machineProviderConfig.DeviceIndex),
-			AssociatePublicIpAddress: machineProviderConfig.PublicIP,
-			SubnetId:                 subnetIDs[0],
-			Groups:                   securityGroupsIDs,
-		},
-	}
+	pvcName = machineProviderConfig.pvcName
+	//TODO: for POC the network will be empty
+	//TODO: for the poc we will create only the boot volume + userdata??
+	//TODO: add labels
+	//TODO: ignition of userData
 
-	blockDeviceMappings, err := getBlockDeviceMappings(machineProviderConfig.BlockDevices, *amiID, client)
-	if err != nil {
-		return nil, mapierrors.InvalidMachineConfiguration("error getting blockDeviceMappings: %v", err)
-	}
 
-	clusterID, ok := getClusterID(machine)
-	if !ok {
-		klog.Errorf("Unable to get cluster ID for machine: %q", machine.Name)
-		return nil, mapierrors.InvalidMachineConfiguration("Unable to get cluster ID for machine: %q", machine.Name)
-	}
-	// Add tags to the created machine
-	rawTagList := []*ec2.Tag{}
-	for _, tag := range machineProviderConfig.Tags {
-		rawTagList = append(rawTagList, &ec2.Tag{Key: aws.String(tag.Name), Value: aws.String(tag.Value)})
-	}
-	rawTagList = append(rawTagList, []*ec2.Tag{
-		{Key: aws.String("kubernetes.io/cluster/" + clusterID), Value: aws.String("owned")},
-		{Key: aws.String("Name"), Value: aws.String(machine.Name)},
-	}...)
-	tagList := removeDuplicatedTags(rawTagList)
-	tagInstance := &ec2.TagSpecification{
-		ResourceType: aws.String("instance"),
-		Tags:         tagList,
-	}
-	tagVolume := &ec2.TagSpecification{
-		ResourceType: aws.String("volume"),
-		Tags:         tagList,
-	}
-
-	userDataEnc := base64.StdEncoding.EncodeToString(userData)
-
-	var iamInstanceProfile *ec2.IamInstanceProfileSpecification
-	if machineProviderConfig.IAMInstanceProfile != nil && machineProviderConfig.IAMInstanceProfile.ID != nil {
-		iamInstanceProfile = &ec2.IamInstanceProfileSpecification{
-			Name: aws.String(*machineProviderConfig.IAMInstanceProfile.ID),
-		}
-	}
-
-	var placement *ec2.Placement
-	if machineProviderConfig.Placement.AvailabilityZone != "" && machineProviderConfig.Subnet.ID == nil {
-		placement = &ec2.Placement{
-			AvailabilityZone: aws.String(machineProviderConfig.Placement.AvailabilityZone),
-		}
-	}
-
-	inputConfig := ec2.RunInstancesInput{
-		ImageId:      amiID,
-		InstanceType: aws.String(machineProviderConfig.InstanceType),
-		// Only a single instance of the AWS instance allowed
-		MinCount:              aws.Int64(1),
-		MaxCount:              aws.Int64(1),
-		KeyName:               machineProviderConfig.KeyName,
-		IamInstanceProfile:    iamInstanceProfile,
-		TagSpecifications:     []*ec2.TagSpecification{tagInstance, tagVolume},
-		NetworkInterfaces:     networkInterfaces,
-		UserData:              &userDataEnc,
-		Placement:             placement,
-		InstanceMarketOptions: getInstanceMarketOptionsRequest(machineProviderConfig),
-	}
-
-	if len(blockDeviceMappings) > 0 {
-		inputConfig.BlockDeviceMappings = blockDeviceMappings
-	}
-	runResult, err := client.RunInstances(&inputConfig)
-	if err != nil {
-		// we return InvalidMachineConfiguration for 4xx errors which by convention signal client misconfiguration
-		// https://tools.ietf.org/html/rfc2616#section-6.1.1
-		// https: //docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
-		// https://docs.aws.amazon.com/sdk-for-go/api/aws/awserr/
-		if _, ok := err.(awserr.Error); ok {
-			if reqErr, ok := err.(awserr.RequestFailure); ok {
-				if strings.HasPrefix(strconv.Itoa(reqErr.StatusCode()), "4") {
-					klog.Infof("Error launching instance: %v", reqErr)
-					return nil, mapierrors.InvalidMachineConfiguration("error launching instance: %v", reqErr.Message())
-				}
-			}
-		}
-		klog.Errorf("Error creating EC2 instance: %v", err)
-		return nil, mapierrors.CreateMachine("error creating EC2 instance: %v", err)
-	}
-
-	if runResult == nil || len(runResult.Instances) != 1 {
-		klog.Errorf("Unexpected reservation creating instances: %v", runResult)
-		return nil, mapierrors.CreateMachine("unexpected reservation creating instance")
-	}
-
-	return runResult.Instances[0], nil
+	newVm := &v1.VirtualMachine{}
+	newVm.Spec = machineProviderConfig.Spec
+	//newVm.Status = machineProviderConfig.Status
+	namespace := machine.Namespace
+	newVm.Spec.Volumes = buildSpecVolume(pvcName, userData)
+	return client.CreateVirtualMachine(namespace, newVM)
 }
 
 type instanceList []*ec2.Instance
