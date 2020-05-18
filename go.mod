@@ -6,7 +6,9 @@ require (
 	github.com/aws/aws-sdk-go v1.15.66
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/go-logr/logr v0.1.0
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.2.0
+	github.com/google/gofuzz v1.1.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20200417151930-302867dc433b
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.8.1

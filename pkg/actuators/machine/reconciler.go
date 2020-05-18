@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	errorutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog"
-	kubevirtapis "kubevirt.io/kubevirt/pkg/api/v1"
+	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 	kubevirtproviderv1 "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/apis/awsprovider/v1beta1"
 )
 
@@ -40,13 +40,9 @@ func (r *Reconciler) create() error {
 		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), err)
 	}
 
-	userData, err := r.machineScope.getUserData()
-	if err != nil {
-		return fmt.Errorf("failed to get user data: %w", err)
-	}
-
 	//instance, err := launchInstance(r.machine, r.providerSpec, userData, r.awsClient)
-	vm, err := createVm(r.machine, r.providerSpec, userData, r.kubevirtClient)
+	namespace := r.machine.Namespace
+	vm, err := createVm(r.virtualMachine, r.kubevirtClient, namespace)
 	if err != nil {
 		klog.Errorf("%s: error creating machine: %v", r.machine.Name, err)
 		conditionFailed := conditionFailed()
@@ -256,7 +252,7 @@ func (r *Reconciler) updateLoadBalancers(instance *ec2.Instance) error {
 }
 
 // setProviderID adds providerID in the machine spec
-func (r *Reconciler) setProviderID(vm *kubevirtapis.VirtualMachineInstance) error {
+func (r *Reconciler) setProviderID(vm *kubevirtapiv1.VirtualMachineInstance) error {
 	existingProviderID := r.machine.Spec.ProviderID
 	if instance == nil {
 		return nil
@@ -334,18 +330,18 @@ func (r *Reconciler) requeueIfInstancePending(instance *ec2.Instance) error {
 	return nil
 }
 
-func (r *Reconciler) getMachineInstances() ([]*apis.VirtualMachineInstance, error) {
+func (r *Reconciler) getMachineInstances() ([]*kubevirtapiv1.VirtualMachineInstance, error) {
 	// If there is a non-empty instance ID, search using that, otherwise
 	// fallback to filtering based on tags.
 	if r.providerStatus.InstanceID != nil && *r.providerStatus.InstanceID != "" {
-		i, err := getExistingInstanceByID(*r.providerStatus.InstanceID, r.awsClient)
+		i, err := getExistingInstanceByID(*r.providerStatus.InstanceID, r.kubevirtClient)
 		if err != nil {
 			klog.Warningf("%s: Failed to find existing instance by id %s: %v", r.machine.Name, *r.providerStatus.InstanceID, err)
 		} else {
 			klog.Infof("%s: Found instance by id: %s", r.machine.Name, *r.providerStatus.InstanceID)
-			return []*ec2.Instance{i}, nil
+			return []*kubevirtapiv1.VirtualMachineInstanceList{i}, nil
 		}
 	}
 
-	return getExistingInstances(r.machine, r.awsClient)
+	return getExistingInstances(r.machine, r.kubevirtClient)
 }

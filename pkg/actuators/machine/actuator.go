@@ -40,24 +40,24 @@ const (
 
 // Actuator is responsible for performing machine reconciliation.
 type Actuator struct {
-	client                runtimeclient.Client
-	eventRecorder         record.EventRecorder
-	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
+	client         runtimeclient.Client
+	eventRecorder  record.EventRecorder
+	kubevirtClient kubevirtclient.Client
 }
 
 // ActuatorParams holds parameter information for Actuator.
 type ActuatorParams struct {
-	Client                runtimeclient.Client
-	EventRecorder         record.EventRecorder
-	KubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
+	Client         runtimeclient.Client
+	EventRecorder  record.EventRecorder
+	kubevirtClient kubevirtclient.Client
 }
 
 // NewActuator returns an actuator.
 func NewActuator(params ActuatorParams) *Actuator {
 	return &Actuator{
-		client:                params.Client,
-		eventRecorder:         params.EventRecorder,
-		kubevirtClientBuilder: params.KubevirtClientBuilder,
+		client:         params.Client,
+		eventRecorder:  params.EventRecorder,
+		kubevirtClient: params.Client,
 	}
 }
 
@@ -75,10 +75,10 @@ func (a *Actuator) handleMachineError(machine *machinev1.Machine, err error, eve
 func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator creating machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
-		Context:               ctx,
-		client:                a.client,
-		machine:               machine,
-		kubevirtClientBuilder: a.kubevirtClientBuilder,
+		Context:        ctx,
+		client:         a.client,
+		machine:        machine,
+		kubevirtClient: a.kubevirtClient,
 	})
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)

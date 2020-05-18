@@ -24,7 +24,7 @@ const (
 type machineScopeParams struct {
 	context.Context
 
-	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
+	kubevirtClient kubevirtclient.Client
 	// api server controller runtime client
 	client runtimeclient.Client
 	// machine resource
