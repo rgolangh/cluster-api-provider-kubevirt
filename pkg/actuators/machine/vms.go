@@ -15,4 +15,8 @@ func createVM(virtualMachine *kubevirtapiv1.VirtualMachine, underkubeclient kube
 	return underkubeclient.CreateVirtualMachine(namespace, virtualMachine)
 }
 
+func vmExists(vmName string, underkubeclient kubevirtclient.Client, namespace string) (*kubevirtapiv1.VirtualMachine, error) {
+	return underkubeclient.GetVirtualMachine(namespace, vmName)
+}
+
 type vmList []*kubevirtapiv1.VirtualMachine
