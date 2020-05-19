@@ -49,7 +49,7 @@ type Actuator struct {
 type ActuatorParams struct {
 	Client                ctrlRuntimeClient.Client
 	EventRecorder         record.EventRecorder
-	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
+	KubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
 
 // NewActuator returns an actuator.
@@ -57,7 +57,7 @@ func NewActuator(params ActuatorParams) *Actuator {
 	return &Actuator{
 		client:                params.Client,
 		eventRecorder:         params.EventRecorder,
-		kubevirtClientBuilder: params.kubevirtClientBuilder,
+		kubevirtClientBuilder: params.KubevirtClientBuilder,
 	}
 }
 

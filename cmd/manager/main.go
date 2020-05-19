@@ -78,9 +78,9 @@ func main() {
 
 	// Initialize machine actuator.
 	machineActuator := machineactuator.NewActuator(machineactuator.ActuatorParams{
-		Client:         mgr.GetClient(),
-		EventRecorder:  mgr.GetEventRecorderFor("awscontroller"),
-		KubevirtClient: kubevirtclient.GetKubevirtClient(),
+		Client:                mgr.GetClient(),
+		EventRecorder:         mgr.GetEventRecorderFor("awscontroller"),
+		KubevirtClientBuilder: kubevirtclient.NewClient,
 	})
 
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {
