@@ -44,6 +44,8 @@ type KubevirtClientBuilderFuncType func(overKubeCtrlRuntimeClient ctrlRuntimeCli
 type Client interface {
 	CreateVirtualMachine(namespace string, newVM *v1.VirtualMachine) (*v1.VirtualMachine, error)
 	DeleteVirtualMachine(namespace string, name string, options *k8smetav1.DeleteOptions) error
+	GetVirtualMachine(namespace string, name string) (*v1.VirtualMachine, error)
+
 	//NetworkClient() networkclient.Interface
 }
 
@@ -102,8 +104,9 @@ func (c *kubevirtClient) DeleteVirtualMachine(namespace string, name string, opt
 	return c.kubecliclient.VirtualMachine(namespace).Delete(name, options)
 }
 
-func (c *kubevirtClient) GetVirtualMachine(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachine, error) {
-	return c.kubecliclient.VirtualMachine(namespace).Get(name, options)
+func (c *kubevirtClient) GetVirtualMachine(namespace string, name string) (*v1.VirtualMachine, error) {
+	// options *k8smetav1.GetOptions would be nil
+	return c.kubecliclient.VirtualMachine(namespace).Get(name, nil)
 }
 
 func (c *kubevirtClient) ListVirtualMachine(namespace string, options *k8smetav1.ListOptions) (*v1.VirtualMachineList, error) {

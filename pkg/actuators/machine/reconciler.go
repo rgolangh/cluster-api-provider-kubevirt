@@ -166,24 +166,16 @@ func (r *Reconciler) update() error {
 
 // exists returns true if machine exists.
 func (r *Reconciler) exists() (bool, error) {
-	// Get all instances not terminated.
-	existingInstances, err := r.getMachineInstances()
-	if err != nil {
-		klog.Errorf("%s: error getting existing instances: %v", r.machine.Name, err)
+	namespace := r.machine.Namespace
+	existingVm, err := vmExists(r.machine.Name, r.kubevirtClient, namespace)
+	// OR
+	//existingVm, err := vmExists(r.virtualMachine.Name, r.kubevirtClient, namespace)
+	if err != nil || existingVm == nil {
+		klog.Errorf("%s: error getting existing vms: %v", r.machine.Name, err)
 		return false, err
 	}
 
-	if len(existingInstances) == 0 {
-		if r.machine.Spec.ProviderID != nil && *r.machine.Spec.ProviderID != "" && (r.machine.Status.LastUpdated == nil || r.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) {
-			klog.Infof("%s: Possible eventual-consistency discrepancy; returning an error to requeue", r.machine.Name)
-			return false, &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterSeconds * time.Second}
-		}
-
-		klog.Infof("%s: Instance does not exist", r.machine.Name)
-		return false, nil
-	}
-
-	return existingInstances[0] != nil, err
+	return true, err
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane
