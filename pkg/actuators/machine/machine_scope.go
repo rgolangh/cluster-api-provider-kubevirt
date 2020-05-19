@@ -68,7 +68,7 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 	virtualMachine.TypeMeta = providerSpec.TypeMeta
 	virtualMachine.ObjectMeta = providerSpec.ObjectMeta
 	// TODO Nir - find pvc name
-	virtualMachine.Spec.DataVolumeTemplates = []cdiv1.DataVolume{*buildBootVolumeDataVolumeTemplate(virtualMachine.Name, "pvc")}
+	virtualMachine.Spec.DataVolumeTemplates = []cdiv1.DataVolume{*buildBootVolumeDataVolumeTemplate(virtualMachine.Name, "pvc", params.machine.Namespace)}
 
 	// TODO Nir - Add other virtualMachine params
 
@@ -82,13 +82,23 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 	}, nil
 }
 
-func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string) *cdiv1.DataVolume {
+func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string, namespace string) *cdiv1.DataVolume {
 	// TODO Nir - add spec to data volume
 	return &cdiv1.DataVolume{
+		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: virtualMachineName + "BootVolume",
+			Name:      virtualMachineName + "BootVolume",
+			Namespace: namespace,
 		},
-		Spec: cdiv1.DataVolumeSpec{},
+		Spec: cdiv1.DataVolumeSpec{
+			Source: cdiv1.DataVolumeSource{
+				PVC: &cdiv1.DataVolumeSourcePVC{
+					Name:      pvcName,
+					Namespace: namespace,
+				},
+			},
+			PVC: &corev1.PersistentVolumeClaimSpec{},
+		},
 	}
 }
 
