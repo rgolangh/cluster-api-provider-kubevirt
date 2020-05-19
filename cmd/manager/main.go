@@ -19,14 +19,14 @@ import (
 	"os"
 	"time"
 
+	machineactuator "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuators/machine"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/klog"
 	"k8s.io/klog/klogr"
-	machineactuator "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuators/machine"
 	machinesetcontroller "sigs.k8s.io/cluster-api-provider-aws/pkg/actuators/machineset"
-	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/version"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -78,9 +78,9 @@ func main() {
 
 	// Initialize machine actuator.
 	machineActuator := machineactuator.NewActuator(machineactuator.ActuatorParams{
-		Client:           mgr.GetClient(),
-		EventRecorder:    mgr.GetEventRecorderFor("awscontroller"),
-		AwsClientBuilder: awsclient.NewClient,
+		Client:         mgr.GetClient(),
+		EventRecorder:  mgr.GetEventRecorderFor("awscontroller"),
+		KubevirtClient: kubevirtclient.GetKubevirtClient(),
 	})
 
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {

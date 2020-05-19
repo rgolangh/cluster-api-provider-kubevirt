@@ -1,7 +1,6 @@
 package machine
 
 import (
-	"github.com/aws/aws-sdk-go/service/ec2"
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
@@ -12,8 +11,8 @@ func String(v string) *string {
 	return &v
 }
 
-func createVm(virtualMachine *kubevirtapiv1.VirtualMachine, underkubeclient kubevirtclient.Client, namespace string) (*kubevirtapiv1.VirtualMachine, error) {
+func createVM(virtualMachine *kubevirtapiv1.VirtualMachine, underkubeclient kubevirtclient.Client, namespace string) (*kubevirtapiv1.VirtualMachine, error) {
 	return underkubeclient.CreateVirtualMachine(namespace, virtualMachine)
 }
 
-type vmList []*ec2.Instance
+type vmList []*kubevirtapiv1.VirtualMachine

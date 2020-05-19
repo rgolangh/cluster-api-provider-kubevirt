@@ -5,6 +5,7 @@ import (
 
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 
+	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
@@ -12,8 +13,7 @@ import (
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 	cdiv1 "kubevirt.io/containerized-data-importer/pkg/apis/core/v1alpha1"
-	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
-	runtimeclient "github.com/kubevirt/controller-runtime/pkg/client"
+	ctrlRuntimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -24,9 +24,9 @@ const (
 type machineScopeParams struct {
 	context.Context
 
-	kubevirtClient kubevirtclient.Client
+	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 	// api server controller runtime client
-	client runtimeclient.Client
+	client ctrlRuntimeClient.Client
 	// machine resource
 	machine *machinev1.Machine
 }
@@ -37,10 +37,10 @@ type machineScope struct {
 	// client for interacting with KubeVirt
 	kubevirtClient kubevirtclient.Client
 	// api server controller runtime client
-	client runtimeclient.Client
+	client ctrlRuntimeClient.Client
 	// machine resource
 	machine            *machinev1.Machine
-	machineToBePatched runtimeclient.Patch
+	machineToBePatched ctrlRuntimeClient.Patch
 	virtualMachine     *kubevirtapiv1.VirtualMachine
 }
 
@@ -55,8 +55,8 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	//(client kubecli.KubevirtClient, namespace, region string) returns:Client
-	kubevirtClient, err := params.kubevirtClientBuilder(params.client, params.machine.Namespace)
+	// TODO Nir - add secretName
+	kubevirtClient, err := params.kubevirtClientBuilder(params.client, "", params.machine.Namespace)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -77,7 +77,7 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 		kubevirtClient:     kubevirtClient,
 		client:             params.client,
 		machine:            params.machine,
-		machineToBePatched: runtimeclient.MergeFrom(params.machine.DeepCopy()),
+		machineToBePatched: ctrlRuntimeClient.MergeFrom(params.machine.DeepCopy()),
 		virtualMachine:     &virtualMachine,
 	}, nil
 }
