@@ -3,7 +3,7 @@ package machine
 import (
 	"context"
 
-	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
@@ -12,8 +12,8 @@ import (
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 	cdiv1 "kubevirt.io/containerized-data-importer/pkg/apis/core/v1alpha1"
-	kubevirtproviderv1 "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
+	runtimeclient "github.com/kubevirt/controller-runtime/pkg/client"
 )
 
 const (

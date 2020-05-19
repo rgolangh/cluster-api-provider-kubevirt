@@ -1,10 +1,10 @@
 FROM registry.svc.ci.openshift.org/openshift/release:golang-1.13 AS builder
-WORKDIR /go/src/sigs.k8s.io/cluster-api-provider-kubevirt
+WORKDIR /go/src/github.com/kubevirt/cluster-api-provider-kubevirt
 COPY . .
 # VERSION env gets set in the openshift/release image and refers to the golang version, which interfers with our own
 RUN unset VERSION \
  && GOPROXY=off NO_DOCKER=1 make build
 
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
-COPY --from=builder /go/src/sigs.k8s.io/cluster-api-provider-kubevirt/bin/machine-controller-manager /
-COPY --from=builder /go/src/sigs.k8s.io/cluster-api-provider-kubevirt/bin/termination-handler /
+COPY --from=builder /go/src/github.com/kubevirt/cluster-api-provider-kubevirt/bin/machine-controller-manager /
+COPY --from=builder /go/src/github.com/kubevirt/cluster-api-provider-kubevirt/bin/termination-handler /

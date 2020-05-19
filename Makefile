@@ -26,7 +26,7 @@ GOGCFLAGS ?= -gcflags=all="-N -l"
 endif
 
 VERSION     ?= $(shell git describe --always --abbrev=7)
-REPO_PATH   ?= sigs.k8s.io/cluster-api-provider-kubevirt
+REPO_PATH   ?= github.com/kubevirt/cluster-api-provider-kubevirt
 LD_FLAGS    ?= -X $(REPO_PATH)/pkg/version.Raw=$(VERSION) -extldflags "-static"
 MUTABLE_TAG ?= latest
 IMAGE        = origin-aws-machine-controllers
@@ -40,7 +40,7 @@ ifeq ($(NO_DOCKER), 1)
   IMAGE_BUILD_CMD = imagebuilder
   CGO_ENABLED = 1
 else
-  DOCKER_CMD := docker run --rm -e CGO_ENABLED=1 -v "$(PWD)":/go/src/sigs.k8s.io/cluster-api-provider-kubevirt:Z -w /go/src/sigs.k8s.io/cluster-api-provider-aws openshift/origin-release:golang-1.13
+  DOCKER_CMD := docker run --rm -e CGO_ENABLED=1 -v "$(PWD)":/go/src/github.com/kubevirt/cluster-api-provider-kubevirt:Z -w /go/src/sigs.k8s.io/cluster-api-provider-aws openshift/origin-release:golang-1.13
   IMAGE_BUILD_CMD = docker build
 endif
 
@@ -96,7 +96,7 @@ test-e2e: ## Run e2e tests
 
 .PHONY: lint
 lint: ## Go lint your code
-	hack/go-lint.sh -min_confidence 0.3 $$(go list -f '{{ .ImportPath }}' ./... | grep -v -e 'sigs.k8s.io/cluster-api-provider-kubevirt/test' -e 'sigs.k8s.io/cluster-api-provider-kubevirt/pkg/cloud/kubevirt/client/mock')
+	hack/go-lint.sh -min_confidence 0.3 $$(go list -f '{{ .ImportPath }}' ./... | grep -v -e 'github.com/kubevirt/cluster-api-provider-kubevirt/test' -e 'github.com/kubevirt/cluster-api-provider-kubevirt/pkg/cloud/kubevirt/client/mock')
 
 .PHONY: fmt
 fmt: ## Go fmt your code

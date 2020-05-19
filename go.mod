@@ -1,4 +1,4 @@
-module sigs.k8s.io/cluster-api-provider-kubevirt
+module github.com/kubevirt/cluster-api-provider-kubevirt
 
 go 1.13
 

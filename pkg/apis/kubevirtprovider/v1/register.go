@@ -19,7 +19,7 @@ limitations under the License.
 // Package v1 contains API Schema definitions for the kubevirtproviderconfig v1 API group
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package,register
-// +k8s:conversion-gen=sigs.k8s.io/cluster-api-provider-kubevirt/pkg/apis/kubevirtproviderconfig
+// +k8s:conversion-gen=github.com/kubevirto/cluster-api-provider-kubevirt/pkg/apis/kubevirtproviderconfig
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=awsproviderconfig.k8s.io
 package v1

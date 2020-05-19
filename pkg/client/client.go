@@ -21,7 +21,7 @@ import (
 	v1 "kubevirt.io/client-go/api/v1"
 	"kubevirt.io/client-go/kubecli"
 	overKubeClient "sigs.k8s.io/controller-runtime/pkg/client"
-	metav1 "sigs.k8s.io/cluster-api-provider-kubevirt/vendor/k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "github.com/kubevirt/cluster-api-provider-kubevirt/vendor/k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )

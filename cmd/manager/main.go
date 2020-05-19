@@ -24,7 +24,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/klog"
 	"k8s.io/klog/klogr"
-	machineactuator "sigs.k8s.io/cluster-api-provider-aws/pkg/actuators/machine"
+	machineactuator "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuators/machine"
 	machinesetcontroller "sigs.k8s.io/cluster-api-provider-aws/pkg/actuators/machineset"
 	awsclient "sigs.k8s.io/cluster-api-provider-aws/pkg/client"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/version"

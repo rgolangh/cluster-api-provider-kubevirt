@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 
-	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 

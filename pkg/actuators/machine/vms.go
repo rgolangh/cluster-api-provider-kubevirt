@@ -2,7 +2,7 @@ package machine
 
 import (
 	"github.com/aws/aws-sdk-go/service/ec2"
-	kubevirtclient "sigs.k8s.io/cluster-api-provider-kubevirt/pkg/client"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )
