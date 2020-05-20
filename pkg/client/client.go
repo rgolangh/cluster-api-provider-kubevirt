@@ -44,8 +44,12 @@ type Client interface {
 	CreateVirtualMachine(namespace string, newVM *v1.VirtualMachine) (*v1.VirtualMachine, error)
 	DeleteVirtualMachine(namespace string, name string, options *k8smetav1.DeleteOptions) error
 	GetVirtualMachine(namespace string, name string) (*v1.VirtualMachine, error)
-
-	//NetworkClient() networkclient.Interface
+	ListVirtualMachine(namespace string, options *k8smetav1.ListOptions) (*v1.VirtualMachineList, error)
+	UpdateVirtualMachine(namespace string, vm *v1.VirtualMachine) (*v1.VirtualMachine, error)
+	PatchVirtualMachine(namespace string, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.VirtualMachine, err error)
+	RestartVirtualMachine(namespace string, name string) error
+	StartVirtualMachine(namespace string, name string) error
+	StopVirtualMachine(namespace string, name string) error
 }
 
 type kubevirtClient struct {

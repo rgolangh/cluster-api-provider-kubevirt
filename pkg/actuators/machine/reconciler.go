@@ -99,10 +99,9 @@ func (r *Reconciler) delete() error {
 func (r *Reconciler) update() error {
 	klog.Infof("%s: updating machine", r.machine.GetName())
 
-	// TODO implement
-	// if err := validateMachine(*r.machine); err != nil {
-	// 	return fmt.Errorf("%v: failed validating machine provider spec: %v", r.machine.GetName(), err)
-	// }
+	if validateMachineErr := validateMachine(*r.machine); validateMachineErr != nil {
+		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
+	}
 
 	// // Get all instances not terminated.
 	// existingInstances, err := r.getMachineInstances()
@@ -168,7 +167,7 @@ func (r *Reconciler) update() error {
 func (r *Reconciler) exists() (bool, error) {
 	namespace := r.machine.GetNamespace()
 	existingVM, err := vmExists(r.machine.GetName(), r.kubevirtClient, namespace)
-	// OR
+	// TODO: ask Nir if the name is virtualMachine.name OR the machine.Name
 	//existingVm, err := vmExists(r.virtualMachine.Name, r.kubevirtClient, namespace)
 	if err != nil || existingVM == nil {
 		klog.Errorf("%s: error getting existing vms: %v", r.machine.GetName(), err)
