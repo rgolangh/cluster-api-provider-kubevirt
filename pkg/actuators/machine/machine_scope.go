@@ -10,10 +10,10 @@ import (
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetesclient "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 	cdiv1 "kubevirt.io/containerized-data-importer/pkg/apis/core/v1alpha1"
-	ctrlRuntimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -26,7 +26,7 @@ type machineScopeParams struct {
 
 	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 	// api server controller runtime client
-	client ctrlRuntimeClient.Client
+	kubernetesClient *kubernetesclient.Clientset
 	// machine resource
 	machine *machinev1.Machine
 }
@@ -37,11 +37,10 @@ type machineScope struct {
 	// client for interacting with KubeVirt
 	kubevirtClient kubevirtclient.Client
 	// api server controller runtime client
-	client ctrlRuntimeClient.Client
+	kubernetesClient *kubernetesclient.Clientset
 	// machine resource
-	machine            *machinev1.Machine
-	machineToBePatched ctrlRuntimeClient.Patch
-	virtualMachine     *kubevirtapiv1.VirtualMachine
+	machine        *machinev1.Machine
+	virtualMachine *kubevirtapiv1.VirtualMachine
 }
 
 func newMachineScope(params machineScopeParams) (*machineScope, error) {
@@ -56,7 +55,7 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 	}
 
 	// TODO Nir - add secretName
-	kubevirtClient, err := params.kubevirtClientBuilder(params.client, "", params.machine.Namespace)
+	kubevirtClient, err := params.kubevirtClientBuilder(params.kubernetesClient, "", params.machine.Namespace)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -73,12 +72,11 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 	// TODO Nir - Add other virtualMachine params
 
 	return &machineScope{
-		Context:            params.Context,
-		kubevirtClient:     kubevirtClient,
-		client:             params.client,
-		machine:            params.machine,
-		machineToBePatched: ctrlRuntimeClient.MergeFrom(params.machine.DeepCopy()),
-		virtualMachine:     &virtualMachine,
+		Context:          params.Context,
+		kubevirtClient:   kubevirtClient,
+		kubernetesClient: params.kubernetesClient,
+		machine:          params.machine,
+		virtualMachine:   &virtualMachine,
 	}, nil
 }
 
@@ -104,29 +102,30 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string
 
 // Patch patches the machine spec and machine status after reconciling.
 func (s *machineScope) patchMachine() error {
-	klog.V(3).Infof("%v: patching machine", s.machine.GetName())
+	// TODO implement if needed otherwise remove
+	// klog.V(3).Infof("%v: patching machine", s.machine.GetName())
 
-	providerStatus, err := kubevirtproviderv1.RawExtensionFromProviderStatus(providerStatusFromVirtualMachineStatus(&s.virtualMachine.Status))
-	if err != nil {
-		return machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
-	}
-	s.machine.Status.ProviderStatus = providerStatus
+	// providerStatus, err := kubevirtproviderv1.RawExtensionFromProviderStatus(providerStatusFromVirtualMachineStatus(&s.virtualMachine.Status))
+	// if err != nil {
+	// 	return machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
+	// }
+	// s.machine.Status.ProviderStatus = providerStatus
 
-	statusCopy := *s.machine.Status.DeepCopy()
+	// statusCopy := *s.machine.Status.DeepCopy()
 
-	// patch machine
-	if err := s.client.Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
-		klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
-		return err
-	}
+	// // patch machine
+	// if err := s.client.Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+	// 	klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
+	// 	return err
+	// }
 
-	s.machine.Status = statusCopy
+	// s.machine.Status = statusCopy
 
-	// patch status
-	if err := s.client.Status().Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
-		klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
-		return err
-	}
+	// // patch status
+	// if err := s.client.Status().Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+	// 	klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
+	// 	return err
+	// }
 
 	return nil
 }

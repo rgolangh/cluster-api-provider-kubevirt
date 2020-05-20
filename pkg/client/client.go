@@ -21,13 +21,12 @@ import (
 
 	networkclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
-	corev1 "k8s.io/api/core/v1"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	kubernetesclient "k8s.io/client-go/kubernetes"
 	v1 "kubevirt.io/client-go/api/v1"
 	"kubevirt.io/client-go/kubecli"
-	ctrlRuntimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 //go:generate go run ../../vendor/github.com/golang/mock/mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
@@ -38,7 +37,7 @@ const (
 )
 
 // KubevirtClientBuilderFuncType is function type for building aws client
-type KubevirtClientBuilderFuncType func(overKubeCtrlRuntimeClient ctrlRuntimeClient.Client, secretName, namespace string) (Client, error)
+type KubevirtClientBuilderFuncType func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (Client, error)
 
 // Client is a wrapper object for actual kubevirt clients: virtctl and the kubecli
 type Client interface {
@@ -56,7 +55,7 @@ type kubevirtClient struct {
 }
 
 // NewClient creates our client wrapper object for the actual KubeVirt and VirtCtl clients we use.
-func NewClient(overKubeCtrlRuntimeClient ctrlRuntimeClient.Client, secretName, namespace string) (Client, error) {
+func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (Client, error) {
 	var kubeConfig string
 
 	if secretName == "" {
@@ -65,14 +64,14 @@ func NewClient(overKubeCtrlRuntimeClient ctrlRuntimeClient.Client, secretName, n
 
 	// TODO Verify if namespace is not empty
 
-	var secret corev1.Secret
-	if getSecretErr := overKubeCtrlRuntimeClient.Get(context.Background(), ctrlRuntimeClient.ObjectKey{Namespace: namespace, Name: secretName}, &secret); getSecretErr != nil {
+	userDataSecret, getSecretErr := kubernetesClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, k8smetav1.GetOptions{})
+	if getSecretErr != nil {
 		if apimachineryerrors.IsNotFound(getSecretErr) {
 			return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v not found", namespace, secretName, getSecretErr)
 		}
 		return nil, getSecretErr
 	}
-	underKubeConfig, ok := secret.Data[UnderKubeConfig]
+	underKubeConfig, ok := userDataSecret.Data[UnderKubeConfig]
 	if !ok {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret %v did not contain key %v",
 			secretName, UnderKubeConfig)

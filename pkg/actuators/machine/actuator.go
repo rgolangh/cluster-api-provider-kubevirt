@@ -26,7 +26,7 @@ import (
 	"k8s.io/klog"
 
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
-	ctrlRuntimeClient "sigs.k8s.io/controller-runtime/pkg/client"
+	kubernetesclient "k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -40,14 +40,14 @@ const (
 
 // Actuator is responsible for performing machine reconciliation.
 type Actuator struct {
-	client                ctrlRuntimeClient.Client
+	kubernetesClient      *kubernetesclient.Clientset
 	eventRecorder         record.EventRecorder
 	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
 
 // ActuatorParams holds parameter information for Actuator.
 type ActuatorParams struct {
-	Client                ctrlRuntimeClient.Client
+	KubernetesClient      *kubernetesclient.Clientset
 	EventRecorder         record.EventRecorder
 	KubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 }
@@ -55,7 +55,7 @@ type ActuatorParams struct {
 // NewActuator returns an actuator.
 func NewActuator(params ActuatorParams) *Actuator {
 	return &Actuator{
-		client:                params.Client,
+		kubernetesClient:      params.KubernetesClient,
 		eventRecorder:         params.EventRecorder,
 		kubevirtClientBuilder: params.KubevirtClientBuilder,
 	}
@@ -76,7 +76,7 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 	klog.Infof("%s: actuator creating machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
 		Context:               ctx,
-		client:                a.client,
+		kubernetesClient:      a.kubernetesClient,
 		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
@@ -101,7 +101,7 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 	klog.Infof("%s: actuator checking if machine exists", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
 		Context:               ctx,
-		client:                a.client,
+		kubernetesClient:      a.kubernetesClient,
 		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
@@ -116,7 +116,7 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 	klog.Infof("%s: actuator updating machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
 		Context:               ctx,
-		client:                a.client,
+		kubernetesClient:      a.kubernetesClient,
 		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
@@ -154,7 +154,7 @@ func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error
 	klog.Infof("%s: actuator deleting machine", machine.GetName())
 	scope, err := newMachineScope(machineScopeParams{
 		Context:               ctx,
-		client:                a.client,
+		kubernetesClient:      a.kubernetesClient,
 		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})

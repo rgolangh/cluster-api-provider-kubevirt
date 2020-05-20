@@ -167,10 +167,10 @@ func (r *Reconciler) update() error {
 // exists returns true if machine exists.
 func (r *Reconciler) exists() (bool, error) {
 	namespace := r.machine.Namespace
-	existingVm, err := vmExists(r.machine.Name, r.kubevirtClient, namespace)
+	existingVM, err := vmExists(r.machine.Name, r.kubevirtClient, namespace)
 	// OR
 	//existingVm, err := vmExists(r.virtualMachine.Name, r.kubevirtClient, namespace)
-	if err != nil || existingVm == nil {
+	if err != nil || existingVM == nil {
 		klog.Errorf("%s: error getting existing vms: %v", r.machine.Name, err)
 		return false, err
 	}

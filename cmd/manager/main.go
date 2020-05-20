@@ -15,38 +15,34 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
-	"time"
 
 	machineactuator "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuators/machine"
-	machinesetcontroller "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuators/machineset"
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/version"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
+	kubernetesclient "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/klog"
-	"k8s.io/klog/klogr"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func main() {
-	var printVersion bool
-	flag.BoolVar(&printVersion, "version", false, "print version and exit")
-
 	klog.InitFlags(nil)
+
 	watchNamespace := flag.String("namespace", "", "Namespace that the controller watches to reconcile machine-api objects. If unspecified, the controller watches for machine-api objects across all namespaces.")
+	// TODO Remove this flag when stable
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 
-	if printVersion {
-		fmt.Println(version.String)
-		os.Exit(0)
-	}
+	// TODO what is the difference between this way to start the logger than the way it startes in aws?
+	// ctrl.SetLogger(klogr.New())
+	// setupLog := ctrl.Log.WithName("setup")
+	log := logf.Log.WithName("kubevirt-controller-manager")
+	logf.SetLogger(logf.ZapLogger(false))
+	entryLog := log.WithName("entrypoint")
 
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
@@ -55,50 +51,43 @@ func main() {
 	}
 
 	// Setup a Manager
-	syncPeriod := 10 * time.Minute
-	opts := manager.Options{
-		SyncPeriod: &syncPeriod,
-		// Disable metrics serving
-		MetricsBindAddress: "0",
-	}
+	// TODO do we need to setup MetricsBindAddress: *metricsAddr
+	// metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	// No need to setup "SyncPeriod: &syncPeriod" because there is no reconciled instance implemented
+	opts := manager.Options{}
 	if *watchNamespace != "" {
 		opts.Namespace = *watchNamespace
 		klog.Infof("Watching machine-api objects only in namespace %q for reconciliation.", opts.Namespace)
 	}
-
 	mgr, err := manager.New(cfg, opts)
 	if err != nil {
-		klog.Fatalf("Error creating manager: %v", err)
+		entryLog.Error(err, "Unable to set up overall controller manager")
+		os.Exit(1)
+	}
+
+	// Initialize overKube kubernetes client
+	kubernetesClient, err := kubernetesclient.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		entryLog.Error(err, "Failed to create kubernetes client from configuration")
 	}
 
 	// Setup Scheme for all resources
+	// TODO do we need to use internal api.AddToScheme (for example in ovirt)
 	if err := mapiv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
 		klog.Fatalf("Error setting up scheme: %v", err)
 	}
 
 	// Initialize machine actuator.
 	machineActuator := machineactuator.NewActuator(machineactuator.ActuatorParams{
-		Client:                mgr.GetClient(),
+		KubernetesClient:      kubernetesClient,
 		EventRecorder:         mgr.GetEventRecorderFor("awscontroller"),
 		KubevirtClientBuilder: kubevirtclient.NewClient,
 	})
 
+	// TODO this is call to machine-api-operator/pkg/controller/machine
+	// In ovirt the call is to cluster-api/pkg/controller/machine
+	// What is the difference? which one is better?
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {
 		klog.Fatalf("Error adding actuator: %v", err)
-	}
-
-	ctrl.SetLogger(klogr.New())
-	setupLog := ctrl.Log.WithName("setup")
-	if err = (&machinesetcontroller.Reconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("MachineSet"),
-	}).SetupWithManager(mgr, controller.Options{}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MachineSet")
-		os.Exit(1)
-	}
-	// Start the Cmd
-	err = mgr.Start(ctrl.SetupSignalHandler())
-	if err != nil {
-		klog.Fatalf("Error starting manager: %v", err)
 	}
 }
