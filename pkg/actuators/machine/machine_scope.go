@@ -60,15 +60,22 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
+	runningState := true
+	runAlways := kubevirtapiv1.RunStrategyAlways
 
+	// TODO understand if the 'Template' is needed here
 	virtualMachine := kubevirtapiv1.VirtualMachine{
-		Spec:   kubevirtapiv1.VirtualMachineSpec{},
+		Spec: kubevirtapiv1.VirtualMachineSpec{
+			Running:     &runningState,
+			RunStrategy: &runAlways,
+			DataVolumeTemplates: []cdiv1.DataVolume{
+				*buildBootVolumeDataVolumeTemplate(params.machine.GetName(), providerSpec.PvcName, params.machine.GetNamespace()),
+			},
+		},
 		Status: providerStatus.VirtualMachineStatus,
 	}
-	virtualMachine.TypeMeta = providerSpec.TypeMeta
-	virtualMachine.ObjectMeta = providerSpec.ObjectMeta
-	// TODO Nir - find pvc name
-	virtualMachine.Spec.DataVolumeTemplates = []cdiv1.DataVolume{*buildBootVolumeDataVolumeTemplate(virtualMachine.Name, "pvc", params.machine.Namespace)}
+	virtualMachine.TypeMeta = params.machine.TypeMeta
+	virtualMachine.ObjectMeta = params.machine.ObjectMeta
 
 	// TODO Nir - Add other virtualMachine params
 

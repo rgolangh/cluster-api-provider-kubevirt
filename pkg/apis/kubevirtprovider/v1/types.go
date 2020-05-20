@@ -17,15 +17,14 @@ limitations under the License.
 package v1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )
 
 // KubevirtMachineProviderSpec is the Schema for the KubevirtMachineProviderSpec API
 // +k8s:openapi-gen=true
 type KubevirtMachineProviderSpec struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	PvcName string `json:"pvcName,omitempty"`
+	//metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 // KubevirtMachineProviderStatus is the type that will be embedded in a Machine.Status.ProviderStatus field.
