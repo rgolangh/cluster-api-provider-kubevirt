@@ -28,24 +28,24 @@ func newReconciler(scope *machineScope) *Reconciler {
 
 // create creates machine if it does not exists.
 func (r *Reconciler) create() error {
-	klog.Infof("%s: creating machine", r.machine.Name)
+	klog.Infof("%s: creating machine", r.machine.GetName())
 
 	if validateMachineErr := validateMachine(*r.machine); validateMachineErr != nil {
 		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
 	}
 
 	//instance, err := launchInstance(r.machine, r.providerSpec, userData, r.awsClient)
-	namespace := r.machine.Namespace
+	namespace := r.machine.GetNamespace()
 	vm, createVMErr := createVM(r.virtualMachine, r.kubevirtClient, namespace)
 	if createVMErr != nil {
-		klog.Errorf("%s: error creating machine: %v", r.machine.Name, createVMErr)
+		klog.Errorf("%s: error creating machine: %v", r.machine.GetName(), createVMErr)
 		conditionFailed := conditionFailed()
 		conditionFailed.Message = createVMErr.Error()
 		r.machineScope.setProviderStatus(nil, conditionFailed)
 		return fmt.Errorf("failed to create virtual machine: %w", createVMErr)
 	}
 
-	klog.Infof("Created Machine %v", r.machine.Name)
+	klog.Infof("Created Machine %v", r.machine.GetName())
 
 	if setIDErr := r.setProviderID(vm); setIDErr != nil {
 		return fmt.Errorf("failed to update machine object with providerID: %w", setIDErr)
@@ -62,7 +62,7 @@ func (r *Reconciler) create() error {
 
 // delete deletes machine
 func (r *Reconciler) delete() error {
-	klog.Infof("%s: deleting machine", r.machine.Name)
+	klog.Infof("%s: deleting machine", r.machine.GetName())
 
 	// TODO implement
 	// // Get all instances not terminated.
@@ -97,7 +97,7 @@ func (r *Reconciler) delete() error {
 
 // update finds a vm and reconciles the machine resource status against it.
 func (r *Reconciler) update() error {
-	klog.Infof("%s: updating machine", r.machine.Name)
+	klog.Infof("%s: updating machine", r.machine.GetName())
 
 	// TODO implement
 	// if err := validateMachine(*r.machine); err != nil {
@@ -166,15 +166,13 @@ func (r *Reconciler) update() error {
 
 // exists returns true if machine exists.
 func (r *Reconciler) exists() (bool, error) {
-	namespace := r.machine.Namespace
-	existingVM, err := vmExists(r.machine.Name, r.kubevirtClient, namespace)
+	namespace := r.machine.GetNamespace()
+	existingVM, err := vmExists(r.machine.GetName(), r.kubevirtClient, namespace)
 	// OR
 	//existingVm, err := vmExists(r.virtualMachine.Name, r.kubevirtClient, namespace)
 	if err != nil || existingVM == nil {
-		klog.Errorf("%s: error getting existing vms: %v", r.machine.Name, err)
-		return false, err
+		klog.Errorf("%s: error getting existing vms: %v", r.machine.GetName(), err)
 	}
-
 	return true, err
 }
 
@@ -251,11 +249,11 @@ func (r *Reconciler) setProviderID(vm *kubevirtapiv1.VirtualMachine) error {
 	providerID := fmt.Sprintf("kubevirt:///%s", string(vm.UID))
 
 	if existingProviderID != nil && *existingProviderID == providerID {
-		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", r.machine.Name, *existingProviderID)
+		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", r.machine.GetName(), *existingProviderID)
 		return nil
 	}
 	r.machine.Spec.ProviderID = &providerID
-	klog.Infof("%s: ProviderID set at machine spec: %s", r.machine.Name, providerID)
+	klog.Infof("%s: ProviderID set at machine spec: %s", r.machine.GetName(), providerID)
 	return nil
 }
 
@@ -311,7 +309,7 @@ func (r *Reconciler) requeueIfInstancePending(vm *kubevirtapiv1.VirtualMachine) 
 	// attempting to update status until it hits a more permanent state. This will ensure
 	// we get a public IP populated more quickly.
 	if !vm.Status.Ready {
-		klog.Infof("%s: VM status is not ready, returning an error to requeue", r.machine.Name)
+		klog.Infof("%s: VM status is not ready, returning an error to requeue", r.machine.GetName())
 		return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterSeconds * time.Second}
 	}
 

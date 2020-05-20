@@ -55,7 +55,8 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 	}
 
 	// TODO Nir - add secretName
-	kubevirtClient, err := params.kubevirtClientBuilder(params.kubernetesClient, "", params.machine.Namespace)
+	kubevirtClient, err := params.kubevirtClientBuilder(params.kubernetesClient, "", params.machine.GetNamespace())
+
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -140,7 +141,7 @@ func providerStatusFromVirtualMachineStatus(virtualMachineStatus *kubevirtapiv1.
 // Is other field need to be updated?
 // Why in aws also update s.machine.Status.Addresses?
 func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, condition kubevirtapiv1.VirtualMachineCondition) error {
-	klog.Infof("%s: Updating status", s.machine.Name)
+	klog.Infof("%s: Updating status", s.machine.GetName())
 
 	networkAddresses := []corev1.NodeAddress{}
 
@@ -150,14 +151,14 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, condi
 		// Copy specific adresses - only node adresses
 		addresses, err := extractNodeAddresses(vm)
 		if err != nil {
-			klog.Errorf("%s: Error extracting vm IP addresses: %v", s.machine.Name, err)
+			klog.Errorf("%s: Error extracting vm IP addresses: %v", s.machine.GetName(), err)
 			return err
 		}
 
 		networkAddresses = append(networkAddresses, addresses...)
-		klog.Infof("%s: finished calculating KubeVirt status", s.machine.Name)
+		klog.Infof("%s: finished calculating KubeVirt status", s.machine.GetName())
 	} else {
-		klog.Infof("%s: couldn't calculate KubeVirt status - the provided vm is empty", s.machine.Name)
+		klog.Infof("%s: couldn't calculate KubeVirt status - the provided vm is empty", s.machine.GetName())
 	}
 
 	s.machine.Status.Addresses = networkAddresses

@@ -120,10 +120,13 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 		machine:               machine,
 		kubevirtClientBuilder: a.kubevirtClientBuilder,
 	})
+
 	if err != nil {
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
 		return a.handleMachineError(machine, fmtErr, updateEventAction)
 	}
+
+	previousResourceVersion := scope.machine.ResourceVersion
 	if err := newReconciler(scope).update(); err != nil {
 		// Update machine and machine status in case it was modified
 		if err := scope.patchMachine(); err != nil {
@@ -132,8 +135,6 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 		fmtErr := fmt.Errorf(reconcilerFailFmt, machine.GetName(), updateEventAction, err)
 		return a.handleMachineError(machine, fmtErr, updateEventAction)
 	}
-
-	previousResourceVersion := scope.machine.ResourceVersion
 
 	if err := scope.patchMachine(); err != nil {
 		return err

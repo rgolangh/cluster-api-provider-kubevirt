@@ -94,7 +94,7 @@ func (h *handler) run(ctx context.Context, wg *sync.WaitGroup) error {
 		return fmt.Errorf("error fetching machine for node (%q): %v", h.nodeName, err)
 	}
 
-	logger := h.log.WithValues("machine", machine.Name)
+	logger := h.log.WithValues("machine", machine.GetName())
 	logger.V(1).Info("Monitoring node for machine")
 
 	if err := wait.PollImmediateUntil(h.pollInterval, func() (bool, error) {
