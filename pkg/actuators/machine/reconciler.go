@@ -64,33 +64,27 @@ func (r *Reconciler) create() error {
 func (r *Reconciler) delete() error {
 	klog.Infof("%s: deleting machine", r.machine.GetName())
 
-	// TODO implement
-	// // Get all instances not terminated.
-	// existingInstances, err := r.getMachineInstances()
-	// if err != nil {
-	// 	klog.Errorf("%s: error getting existing instances: %v", r.machine.Name, err)
-	// 	return err
-	// }
+	if validateMachineErr := validateMachine(*r.machine); validateMachineErr != nil {
+		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
+	}
 
-	// existingLen := len(existingInstances)
-	// klog.Infof("%s: found %d existing instances for machine", r.machine.Name, existingLen)
-	// if existingLen == 0 {
-	// 	klog.Warningf("%s: no instances found to delete for machine", r.machine.Name)
-	// 	return nil
-	// }
+	namespace := r.machine.GetNamespace()
+	existingVM, err := getVM(r.virtualMachine.GetName(), r.kubevirtClient, namespace)
+	if err != nil {
+		klog.Errorf("%s: error getting existing VM: %v", r.machine.GetName(), err)
+		return err
+	}
 
-	// terminatingInstances, err := terminateInstances(r.kubevirtClient, existingInstances)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to delete instaces: %w", err)
-	// }
+	if existingVM == nil {
+		klog.Warningf("%s: VM not found to delete for machine", r.machine.Name)
+		return nil
+	}
 
-	// if len(terminatingInstances) == 1 {
-	// 	if terminatingInstances[0] != nil && terminatingInstances[0].CurrentState != nil && terminatingInstances[0].CurrentState.Name != nil {
-	// 		r.machine.Annotations[machinecontroller.MachineInstanceStateAnnotationName] = aws.StringValue(terminatingInstances[0].CurrentState.Name)
-	// 	}
-	// }
+	if err := deleteVM(r.virtualMachine.GetName(), r.kubevirtClient, namespace); err != nil {
+		return fmt.Errorf("failed to delete VM: %w", err)
+	}
 
-	// klog.Infof("Deleted machine %v", r.machine.Name)
+	klog.Infof("Deleted machine %v", r.machine.GetName())
 
 	return nil
 }
@@ -103,72 +97,55 @@ func (r *Reconciler) update() error {
 		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
 	}
 
-	// // Get all instances not terminated.
-	// existingInstances, err := r.getMachineInstances()
-	// if err != nil {
-	// 	klog.Errorf("%s: error getting existing instances: %v", r.machine.Name, err)
-	// 	return err
-	// }
+	namespace := r.machine.GetNamespace()
+	existingVM, err := getVM(r.virtualMachine.GetName(), r.kubevirtClient, namespace)
+	if err != nil {
+		klog.Errorf("%s: error getting existing VM: %v", r.machine.GetName(), err)
+		return err
+	}
 
-	// existingLen := len(existingInstances)
-	// if existingLen == 0 {
-	// 	if r.machine.Spec.ProviderID != nil && *r.machine.Spec.ProviderID != "" && (r.machine.Status.LastUpdated == nil || r.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) {
-	// 		klog.Infof("%s: Possible eventual-consistency discrepancy; returning an error to requeue", r.machine.Name)
-	// 		return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterSeconds * time.Second}
-	// 	}
+	//TODO Danielle - update ProviderID to lowercase
+	if existingVM == nil {
+		// validate that updates come in the right order
+		// if there is an update that was supposes to be done after that update - return an error
+		if r.machine.Spec.ProviderID != nil && *r.machine.Spec.ProviderID != "" && (r.machine.Status.LastUpdated == nil || r.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) {
+			klog.Infof("%s: Possible eventual-consistency discrepancy; returning an error to requeue", r.machine.Name)
+			return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterSeconds * time.Second}
+		}
+		klog.Warningf("%s: attempted to update machine but the VM found", r.machine.Name)
+		//TODO Danielle - understand that case
+		// Update status to clear out machine details.
+		r.machineScope.setProviderStatus(nil, conditionSuccess())
+		// This is an unrecoverable error condition.  We should delay to
+		// minimize unnecessary API calls.
+		return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterFatalSeconds * time.Second}
+	}
 
-	// 	klog.Warningf("%s: attempted to update machine but no instances found", r.machine.Name)
+	updatedVm, updateVMErr := updateVM(r.virtualMachine, r.kubevirtClient, namespace)
 
-	// 	// Update status to clear out machine details.
-	// 	r.machineScope.setProviderStatus(nil, conditionSuccess())
-	// 	// This is an unrecoverable error condition.  We should delay to
-	// 	// minimize unnecessary API calls.
-	// 	return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterFatalSeconds * time.Second}
-	// }
+	if updateVMErr != nil {
+		return fmt.Errorf("failed to update VM : %w", err)
+	}
+	if setIDErr := r.setProviderID(updatedVm); setIDErr != nil {
+		return fmt.Errorf("failed to update machine object with providerID: %w", setIDErr)
+	}
 
-	// sortInstances(existingInstances)
-	// runningInstances := getRunningFromInstances(existingInstances)
-	// runningLen := len(runningInstances)
-	// var newestInstance *ec2.Instance
+	if err := r.setMachineCloudProviderSpecifics(updatedVm); err != nil {
+		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
+	}
 
-	// if runningLen > 0 {
-	// 	// It would be very unusual to have more than one here, but it is
-	// 	// possible if someone manually provisions a machine with same tag name.
-	// 	klog.Infof("%s: found %d running instances for machine", r.machine.Name, runningLen)
-	// 	newestInstance = runningInstances[0]
+	klog.Infof("Updated machine %s", r.machine.Name)
+	r.machineScope.setProviderStatus(updatedVm, conditionSuccess())
 
-	// 	err = r.updateLoadBalancers(newestInstance)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to updated update load balancers: %w", err)
-	// 	}
-	// } else {
-	// 	// Didn't find any running instances, just newest existing one.
-	// 	// In most cases, there should only be one existing Instance.
-	// 	newestInstance = existingInstances[0]
-	// }
-
-	// if err = r.setProviderID(newestInstance); err != nil {
-	// 	return fmt.Errorf("failed to update machine object with providerID: %w", err)
-	// }
-
-	// if err = r.setMachineCloudProviderSpecifics(newestInstance); err != nil {
-	// 	return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
-	// }
-
-	// klog.Infof("Updated machine %s", r.machine.Name)
-
-	// r.machineScope.setProviderStatus(newestInstance, conditionSuccess())
-
-	// return r.requeueIfInstancePending(newestInstance)
-	return nil
+	return r.requeueIfInstancePending(updatedVm)
 }
 
 // exists returns true if machine exists.
 func (r *Reconciler) exists() (bool, error) {
 	namespace := r.machine.GetNamespace()
-	existingVM, err := vmExists(r.virtualMachine.GetName(), r.kubevirtClient, namespace)
+	existingVM, err := getVM(r.virtualMachine.GetName(), r.kubevirtClient, namespace)
 	if err != nil || existingVM == nil {
-		klog.Errorf("%s: error getting existing vms: %v", r.machine.GetName(), err)
+		klog.Errorf("%s: error getting existing VM: %v", r.machine.GetName(), err)
 	}
 	return true, err
 }
@@ -243,7 +220,7 @@ func (r *Reconciler) setProviderID(vm *kubevirtapiv1.VirtualMachine) error {
 		return nil
 	}
 	// TODO what is the right providerID structure?
-	providerID := fmt.Sprintf("kubevirt:///%s", string(vm.UID))
+	providerID := fmt.Sprintf("kubevirt:///%s/%s", r.machine.GetNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
 		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", r.machine.GetName(), *existingProviderID)
