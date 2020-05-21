@@ -31,7 +31,7 @@ import (
 
 const (
 	scopeFailFmt      = "%s: failed to create scope for machine: %w"
-	reconcilerFailFmt = "%s: reconciler failed to %s machine: %w"
+	vmsFailFmt        = "%s: kubevirt wrapper failed to %s machine: %w"
 	createEventAction = "Create"
 	updateEventAction = "Update"
 	deleteEventAction = "Delete"
@@ -88,7 +88,7 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 		if err := scope.patchMachine(); err != nil {
 			return err
 		}
-		fmtErr := fmt.Errorf(reconcilerFailFmt, machine.GetName(), createEventAction, err)
+		fmtErr := fmt.Errorf(vmsFailFmt, machine.GetName(), createEventAction, err)
 		return a.handleMachineError(machine, fmtErr, createEventAction)
 	}
 	a.eventRecorder.Eventf(machine, corev1.EventTypeNormal, createEventAction, "Created Machine %v", machine.GetName())
@@ -132,7 +132,7 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 		if err := scope.patchMachine(); err != nil {
 			return err
 		}
-		fmtErr := fmt.Errorf(reconcilerFailFmt, machine.GetName(), updateEventAction, err)
+		fmtErr := fmt.Errorf(vmsFailFmt, machine.GetName(), updateEventAction, err)
 		return a.handleMachineError(machine, fmtErr, updateEventAction)
 	}
 
@@ -167,7 +167,7 @@ func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error
 		if err := scope.patchMachine(); err != nil {
 			return err
 		}
-		fmtErr := fmt.Errorf(reconcilerFailFmt, machine.GetName(), deleteEventAction, err)
+		fmtErr := fmt.Errorf(vmsFailFmt, machine.GetName(), deleteEventAction, err)
 		return a.handleMachineError(machine, fmtErr, deleteEventAction)
 	}
 	a.eventRecorder.Eventf(machine, corev1.EventTypeNormal, deleteEventAction, "Deleted machine %v", machine.GetName())

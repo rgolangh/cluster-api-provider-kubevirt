@@ -761,6 +761,7 @@ kubevirt.io/client-go v0.29.0 h1:s8TwjVgELtg5fJ18ipFmwuR17G4p8fOb+u0EJvjj5zk=
 kubevirt.io/containerized-data-importer v1.8.1-0.20190516083534-83c12eaae2ed h1:LlA3Ss/dn65wYofQDo2hRY+Asq4aWVE6IC/WPCqKJoA=
 kubevirt.io/containerized-data-importer v1.8.1-0.20190516083534-83c12eaae2ed/go.mod h1:qF594BtRRkruyrqLwt3zbLCWdPIQNs1qWh4LR1cOzy0=
 kubevirt.io/kubevirt v0.29.0 h1:4FD3fS0LOujA9nBaB76sVcaAAFb4Ln4TfHp3XN0GI+M=
+kubevirt.io/kubevirt v0.29.1 h1:D35tEYG++aMIqiWg00Abw5gy4W75Dusqb8F5wWWgF2o=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=
 modernc.org/golex v1.0.0/go.mod h1:b/QX9oBD/LhixY6NDh+IdGv17hgB+51fET1i2kPSmvk=
 modernc.org/mathutil v1.0.0/go.mod h1:wU0vUrJsVWBZ4P6e7xtFJEhFSNsfRLJ8H458uRjg03k=
