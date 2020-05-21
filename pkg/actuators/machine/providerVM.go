@@ -19,88 +19,88 @@ const (
 	masterLabel              = "node-role.kubernetes.io/master"
 )
 
-// Reconciler runs the logic to reconciles a machine resource towards its desired state
-type Reconciler struct {
+// providerVM runs the logic to reconciles a machine resource towards its desired state
+type providerVM struct {
 	*machineScope
 }
 
-func newReconciler(scope *machineScope) *Reconciler {
-	return &Reconciler{
+func newProviderVM(scope *machineScope) *providerVM {
+	return &providerVM{
 		machineScope: scope,
 	}
 }
 
 // create creates machine if it does not exists.
-func (r *Reconciler) create() error {
-	klog.Infof("%s: creating machine", r.machine.GetName())
+func (p *providerVM) create() error {
+	klog.Infof("%s: creating machine", p.machine.GetName())
 
-	if validateMachineErr := validateMachine(*r.machine); validateMachineErr != nil {
-		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
+	if validateMachineErr := validateMachine(*p.machine); validateMachineErr != nil {
+		return fmt.Errorf("%v: failed validating machine provider spec: %w", p.machine.GetName(), validateMachineErr)
 	}
 
-	vm, createVMErr := r.createVM(r.virtualMachine)
+	vm, createVMErr := p.createVM(p.virtualMachine)
 	if createVMErr != nil {
-		klog.Errorf("%s: error creating machine: %v", r.machine.GetName(), createVMErr)
+		klog.Errorf("%s: error creating machine: %v", p.machine.GetName(), createVMErr)
 		conditionFailed := conditionFailed()
 		conditionFailed.Message = createVMErr.Error()
-		r.machineScope.setProviderStatus(nil, conditionFailed)
+		p.machineScope.setProviderStatus(nil, conditionFailed)
 		return fmt.Errorf("failed to create virtual machine: %w", createVMErr)
 	}
 
-	klog.Infof("Created Machine %v", r.machine.GetName())
+	klog.Infof("Created Machine %v", p.machine.GetName())
 
-	if setIDErr := r.setProviderID(vm); setIDErr != nil {
+	if setIDErr := p.setProviderID(vm); setIDErr != nil {
 		return fmt.Errorf("failed to update machine object with providerID: %w", setIDErr)
 	}
 
-	if err := r.setMachineCloudProviderSpecifics(vm); err != nil {
+	if err := p.setMachineCloudProviderSpecifics(vm); err != nil {
 		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
 	}
 
-	r.machineScope.setProviderStatus(vm, conditionSuccess())
+	p.machineScope.setProviderStatus(vm, conditionSuccess())
 
-	return r.requeueIfInstancePending(vm)
+	return p.requeueIfInstancePending(vm)
 }
 
 // delete deletes machine
-func (r *Reconciler) delete() error {
-	klog.Infof("%s: deleting machine", r.machine.GetName())
+func (p *providerVM) delete() error {
+	klog.Infof("%s: deleting machine", p.machine.GetName())
 
-	if validateMachineErr := validateMachine(*r.machine); validateMachineErr != nil {
-		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
+	if validateMachineErr := validateMachine(*p.machine); validateMachineErr != nil {
+		return fmt.Errorf("%v: failed validating machine provider spec: %w", p.machine.GetName(), validateMachineErr)
 	}
 
-	existingVM, err := r.getVM(r.virtualMachine.GetName())
+	existingVM, err := p.getVM(p.virtualMachine.GetName())
 	if err != nil {
-		klog.Errorf("%s: error getting existing VM: %v", r.machine.GetName(), err)
+		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
 		return err
 	}
 
 	if existingVM == nil {
-		klog.Warningf("%s: VM not found to delete for machine", r.machine.Name)
+		klog.Warningf("%s: VM not found to delete for machine", p.machine.Name)
 		return nil
 	}
 
-	if err := r.deleteVM(r.virtualMachine.GetName()); err != nil {
+	if err := p.deleteVM(p.virtualMachine.GetName()); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
 
-	klog.Infof("Deleted machine %v", r.machine.GetName())
+	klog.Infof("Deleted machine %v", p.machine.GetName())
 
 	return nil
 }
 
 // update finds a vm and reconciles the machine resource status against it.
-func (r *Reconciler) update() error {
-	klog.Infof("%s: updating machine", r.machine.GetName())
+func (p *providerVM) update() error {
+	klog.Infof("%s: updating machine", p.machine.GetName())
 
-	if validateMachineErr := validateMachine(*r.machine); validateMachineErr != nil {
-		return fmt.Errorf("%v: failed validating machine provider spec: %w", r.machine.GetName(), validateMachineErr)
+	if validateMachineErr := validateMachine(*p.machine); validateMachineErr != nil {
+		return fmt.Errorf("%v: failed validating machine provider spec: %w", p.machine.GetName(), validateMachineErr)
 	}
 
-	existingVM, err := r.getVM(r.virtualMachine.GetName())
+	existingVM, err := p.getVM(p.virtualMachine.GetName())
 	if err != nil {
-		klog.Errorf("%s: error getting existing VM: %v", r.machine.GetName(), err)
+		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
 		return err
 	}
 
@@ -108,80 +108,80 @@ func (r *Reconciler) update() error {
 	if existingVM == nil {
 		// validate that updates come in the right order
 		// if there is an update that was supposes to be done after that update - return an error
-		if r.machine.Spec.ProviderID != nil && *r.machine.Spec.ProviderID != "" && (r.machine.Status.LastUpdated == nil || r.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) {
-			klog.Infof("%s: Possible eventual-consistency discrepancy; returning an error to requeue", r.machine.Name)
+		if p.machine.Spec.ProviderID != nil && *p.machine.Spec.ProviderID != "" && (p.machine.Status.LastUpdated == nil || p.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) {
+			klog.Infof("%s: Possible eventual-consistency discrepancy; returning an error to requeue", p.machine.Name)
 			return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterSeconds * time.Second}
 		}
-		klog.Warningf("%s: attempted to update machine but the VM found", r.machine.Name)
+		klog.Warningf("%s: attempted to update machine but the VM found", p.machine.Name)
 		//TODO Danielle - understand that case
 		// Update status to clear out machine details.
-		r.machineScope.setProviderStatus(nil, conditionSuccess())
+		p.machineScope.setProviderStatus(nil, conditionSuccess())
 		// This is an unrecoverable error condition.  We should delay to
 		// minimize unnecessary API calls.
 		return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterFatalSeconds * time.Second}
 	}
 
-	updatedVm, updateVMErr := r.updateVM(r.virtualMachine)
+	updatedVm, updateVMErr := p.updateVM(p.virtualMachine)
 
 	if updateVMErr != nil {
 		return fmt.Errorf("failed to update VM : %w", err)
 	}
-	if setIDErr := r.setProviderID(updatedVm); setIDErr != nil {
+	if setIDErr := p.setProviderID(updatedVm); setIDErr != nil {
 		return fmt.Errorf("failed to update machine object with providerID: %w", setIDErr)
 	}
 
-	if err := r.setMachineCloudProviderSpecifics(updatedVm); err != nil {
+	if err := p.setMachineCloudProviderSpecifics(updatedVm); err != nil {
 		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
 	}
 
-	klog.Infof("Updated machine %s", r.machine.Name)
-	r.machineScope.setProviderStatus(updatedVm, conditionSuccess())
+	klog.Infof("Updated machine %s", p.machine.Name)
+	p.machineScope.setProviderStatus(updatedVm, conditionSuccess())
 
-	return r.requeueIfInstancePending(updatedVm)
+	return p.requeueIfInstancePending(updatedVm)
 }
 
 // exists returns true if machine exists.
-func (r *Reconciler) exists() (bool, error) {
-	existingVM, err := r.getVM(r.virtualMachine.GetName())
+func (p *providerVM) exists() (bool, error) {
+	existingVM, err := p.getVM(p.virtualMachine.GetName())
 	if err != nil || existingVM == nil {
-		klog.Errorf("%s: error getting existing VM: %v", r.machine.GetName(), err)
+		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
 	}
 	return true, err
 }
 
-func (r *Reconciler) createVM(virtualMachine *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error) {
-	return r.kubevirtClient.CreateVirtualMachine(r.machine.GetNamespace(), virtualMachine)
+func (p *providerVM) createVM(virtualMachine *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error) {
+	return p.kubevirtClient.CreateVirtualMachine(p.machine.GetNamespace(), virtualMachine)
 }
 
-func (r *Reconciler) getVM(vmName string) (*kubevirtapiv1.VirtualMachine, error) {
-	return r.kubevirtClient.GetVirtualMachine(r.machine.GetNamespace(), vmName)
+func (p *providerVM) getVM(vmName string) (*kubevirtapiv1.VirtualMachine, error) {
+	return p.kubevirtClient.GetVirtualMachine(p.machine.GetNamespace(), vmName)
 }
 
-func (r *Reconciler) deleteVM(vmName string) error {
+func (p *providerVM) deleteVM(vmName string) error {
 	gracePeriod := int64(10)
-	return r.kubevirtClient.DeleteVirtualMachine(r.machine.GetNamespace(), vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
+	return p.kubevirtClient.DeleteVirtualMachine(p.machine.GetNamespace(), vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
 }
 
-func (r *Reconciler) updateVM(updatedVm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error) {
-	return r.kubevirtClient.UpdateVirtualMachine(r.machine.GetNamespace(), updatedVm)
+func (p *providerVM) updateVM(updatedVm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error) {
+	return p.kubevirtClient.UpdateVirtualMachine(p.machine.GetNamespace(), updatedVm)
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane
-func (r *Reconciler) isMaster() (bool, error) {
+func (p *providerVM) isMaster() (bool, error) {
 	// TODO implement
-	// if r.machine.Status.NodeRef == nil {
-	// 	klog.Errorf("NodeRef not found in machine %s", r.machine.Name)
+	// if p.machine.Status.NodeRef == nil {
+	// 	klog.Errorf("NodeRef not found in machine %s", p.machine.Name)
 	// 	return false, nil
 	// }
 	// node := &corev1.Node{}
 	// nodeKey := types.NamespacedName{
-	// 	Namespace: r.machine.Status.NodeRef.Namespace,
-	// 	Name:      r.machine.Status.NodeRef.Name,
+	// 	Namespace: p.machine.Status.NodeRef.Namespace,
+	// 	Name:      p.machine.Status.NodeRef.Name,
 	// }
 
-	// err := r.client.Get(r.Context, nodeKey, node)
+	// err := p.client.Get(p.Context, nodeKey, node)
 	// if err != nil {
-	// 	return false, fmt.Errorf("failed to get node from machine %s", r.machine.Name)
+	// 	return false, fmt.Errorf("failed to get node from machine %s", p.machine.Name)
 	// }
 
 	// if _, exists := node.Labels[masterLabel]; exists {
@@ -191,7 +191,7 @@ func (r *Reconciler) isMaster() (bool, error) {
 }
 
 // // updateLoadBalancers adds a given machine instance to the load balancers specified in its provider config
-// func (r *Reconciler) updateLoadBalancers(instance *ec2.Instance) error {
+// func (r *providerVM) updateLoadBalancers(instance *ec2.Instance) error {
 // 	if len(r.providerSpec.LoadBalancers) == 0 {
 // 		klog.V(4).Infof("%s: Instance %q has no load balancers configured. Skipping", r.machine.Name, *instance.InstanceId)
 // 		return nil
@@ -230,76 +230,76 @@ func (r *Reconciler) isMaster() (bool, error) {
 // }
 
 // setProviderID adds providerID in the machine spec
-func (r *Reconciler) setProviderID(vm *kubevirtapiv1.VirtualMachine) error {
-	existingProviderID := r.machine.Spec.ProviderID
+func (p *providerVM) setProviderID(vm *kubevirtapiv1.VirtualMachine) error {
+	existingProviderID := p.machine.Spec.ProviderID
 	if vm == nil {
 		return nil
 	}
 	// TODO what is the right providerID structure?
-	providerID := fmt.Sprintf("kubevirt:///%s/%s", r.machine.GetNamespace(), vm.GetName())
+	providerID := fmt.Sprintf("kubevirt:///%s/%s", p.machine.GetNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
-		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", r.machine.GetName(), *existingProviderID)
+		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", p.machine.GetName(), *existingProviderID)
 		return nil
 	}
-	r.machine.Spec.ProviderID = &providerID
-	klog.Infof("%s: ProviderID set at machine spec: %s", r.machine.GetName(), providerID)
+	p.machine.Spec.ProviderID = &providerID
+	klog.Infof("%s: ProviderID set at machine spec: %s", p.machine.GetName(), providerID)
 	return nil
 }
 
-func (r *Reconciler) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.VirtualMachine) error {
+func (p *providerVM) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.VirtualMachine) error {
 	if vm == nil {
 		return nil
 	}
 
-	if r.machine.Labels == nil {
-		r.machine.Labels = make(map[string]string)
+	if p.machine.Labels == nil {
+		p.machine.Labels = make(map[string]string)
 	}
 
-	if r.machine.Spec.Labels == nil {
-		r.machine.Spec.Labels = make(map[string]string)
+	if p.machine.Spec.Labels == nil {
+		p.machine.Spec.Labels = make(map[string]string)
 	}
 
-	if r.machine.Annotations == nil {
-		r.machine.Annotations = make(map[string]string)
+	if p.machine.Annotations == nil {
+		p.machine.Annotations = make(map[string]string)
 	}
 
 	// TODO which labels/annotations need to assign here?
 	// Reaching to machine provider config since the region is not directly
 	// providing by *kubevirtapiv1.VirtualMachine object
-	// machineProviderConfig, err := kubevirtproviderv1.ProviderSpecFromRawExtension(r.machine.Spec.ProviderSpec.Value)
+	// machineProviderConfig, err := kubevirtproviderv1.ProviderSpecFromRawExtension(p.machine.Spec.ProviderSpec.Value)
 	// if err != nil {
 	// 	return fmt.Errorf("error decoding MachineProviderConfig: %w", err)
 	// }
 
-	// r.machine.Labels[machinecontroller.MachineRegionLabelName] = machineProviderConfig.Placement.Region
+	// p.machine.Labels[machinecontroller.MachineRegionLabelName] = machineProviderConfig.Placement.Region
 
 	// if instance.Placement != nil {
-	// 	r.machine.Labels[machinecontroller.MachineAZLabelName] = aws.StringValue(instance.Placement.AvailabilityZone)
+	// 	p.machine.Labels[machinecontroller.MachineAZLabelName] = aws.StringValue(instance.Placement.AvailabilityZone)
 	// }
 
 	// if instance.InstanceType != nil {
-	// 	r.machine.Labels[machinecontroller.MachineInstanceTypeLabelName] = aws.StringValue(instance.InstanceType)
+	// 	p.machine.Labels[machinecontroller.MachineInstanceTypeLabelName] = aws.StringValue(instance.InstanceType)
 	// }
 
 	// if instance.State != nil && instance.State.Name != nil {
-	// 	r.machine.Annotations[machinecontroller.MachineInstanceStateAnnotationName] = aws.StringValue(instance.State.Name)
+	// 	p.machine.Annotations[machinecontroller.MachineInstanceStateAnnotationName] = aws.StringValue(instance.State.Name)
 	// }
 
 	// if instance.InstanceLifecycle != nil && *instance.InstanceLifecycle == ec2.InstanceLifecycleTypeSpot {
 	// 	// Label on the Spec so that it is propogated to the Node
-	// 	r.machine.Spec.Labels[machinecontroller.MachineInterruptibleInstanceLabelName] = ""
+	// 	p.machine.Spec.Labels[machinecontroller.MachineInterruptibleInstanceLabelName] = ""
 	// }
 
 	return nil
 }
 
-func (r *Reconciler) requeueIfInstancePending(vm *kubevirtapiv1.VirtualMachine) error {
+func (p *providerVM) requeueIfInstancePending(vm *kubevirtapiv1.VirtualMachine) error {
 	// If machine state is still pending, we will return an error to keep the controllers
 	// attempting to update status until it hits a more permanent state. This will ensure
 	// we get a public IP populated more quickly.
 	if !vm.Status.Ready {
-		klog.Infof("%s: VM status is not ready, returning an error to requeue", r.machine.GetName())
+		klog.Infof("%s: VM status is not ready, returning an error to requeue", p.machine.GetName())
 		return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterSeconds * time.Second}
 	}
 
@@ -325,7 +325,7 @@ func (r *Reconciler) requeueIfInstancePending(vm *kubevirtapiv1.VirtualMachine) 
 //}
 
 // getRunningFromVms returns all running vms from a list of vms.
-func (r *Reconciler) getRunningFromVms(vms []*kubevirtapiv1.VirtualMachine) []*kubevirtapiv1.VirtualMachine {
+func (p *providerVM) getRunningFromVms(vms []*kubevirtapiv1.VirtualMachine) []*kubevirtapiv1.VirtualMachine {
 	var runningVms []*kubevirtapiv1.VirtualMachine
 	for _, vm := range vms {
 		if vm.Status.Ready {
@@ -337,7 +337,7 @@ func (r *Reconciler) getRunningFromVms(vms []*kubevirtapiv1.VirtualMachine) []*k
 
 // getStoppedVms returns all stopped vms that have a tag matching our machine name,
 // and cluster ID.
-func (r *Reconciler) getStoppedVms(machine *machinev1.Machine, client kubevirtclient.Client) ([]*kubevirtapiv1.VirtualMachine, error) {
+func (p *providerVM) getStoppedVms(machine *machinev1.Machine, client kubevirtclient.Client) ([]*kubevirtapiv1.VirtualMachine, error) {
 	// TODO implement
 	// stoppedInstanceStateFilter := []*string{aws.String(ec2.InstanceStateNameStopped), aws.String(ec2.InstanceStateNameStopping)}
 	// return getInstances(machine, client, stoppedInstanceStateFilter)
@@ -345,13 +345,13 @@ func (r *Reconciler) getStoppedVms(machine *machinev1.Machine, client kubevirtcl
 }
 
 // getExistingVms returns all vms not terminated
-func (r *Reconciler) getExistingVms(machine *machinev1.Machine, client kubevirtclient.Client) ([]*kubevirtapiv1.VirtualMachine, error) {
+func (p *providerVM) getExistingVms(machine *machinev1.Machine, client kubevirtclient.Client) ([]*kubevirtapiv1.VirtualMachine, error) {
 	// TODO implement
 	// return getInstances(machine, client, existingInstanceStates())
 	return nil, nil
 }
 
-func (r *Reconciler) getExistingVMByID(id string, client kubevirtclient.Client) (*kubevirtapiv1.VirtualMachine, error) {
+func (p *providerVM) getExistingVMByID(id string, client kubevirtclient.Client) (*kubevirtapiv1.VirtualMachine, error) {
 	// TODO implement
 	// return getInstanceByID(id, client, existingInstanceStates())
 	return nil, nil
@@ -385,7 +385,7 @@ func (r *Reconciler) getExistingVMByID(id string, client kubevirtclient.Client) 
 // }
 
 // getVmByID returns the vm with the given ID if it exists.
-func (r *Reconciler) getVMByID(id string, client kubevirtclient.Client, instanceStateFilter []*string) (*kubevirtapiv1.VirtualMachine, error) {
+func (p *providerVM) getVMByID(id string, client kubevirtclient.Client, instanceStateFilter []*string) (*kubevirtapiv1.VirtualMachine, error) {
 	// TODO implement
 	// if id == "" {
 	// 	return nil, fmt.Errorf("instance-id not specified")
@@ -418,7 +418,7 @@ func (r *Reconciler) getVMByID(id string, client kubevirtclient.Client, instance
 
 // getVms returns all vms that have a tag matching our machine name,
 // and cluster ID.
-func (r *Reconciler) getVms(machine *machinev1.Machine, client kubevirtclient.Client, vmStateFilter []*string) ([]*kubevirtapiv1.VirtualMachine, error) {
+func (p *providerVM) getVms(machine *machinev1.Machine, client kubevirtclient.Client, vmStateFilter []*string) ([]*kubevirtapiv1.VirtualMachine, error) {
 	// TODO implement
 	// clusterID, ok := getClusterID(machine)
 	// if !ok {
@@ -460,7 +460,7 @@ func (r *Reconciler) getVms(machine *machinev1.Machine, client kubevirtclient.Cl
 }
 
 // terminateVms terminates all provided vms with a single virtctl request.
-func (r *Reconciler) terminateVms(client kubevirtclient.Client, vms []*kubevirtapiv1.VirtualMachine) error {
+func (p *providerVM) terminateVms(client kubevirtclient.Client, vms []*kubevirtapiv1.VirtualMachine) error {
 	// TODO implement: should return similar to aws? []*kubevirtapiv1.VirtualMachineState
 	// instanceIDs := []*string{}
 	// // Cleanup all older instances:

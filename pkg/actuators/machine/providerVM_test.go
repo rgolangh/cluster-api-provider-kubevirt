@@ -80,7 +80,7 @@ func TestAvailabilityZone(t *testing.T) {
 	// 			t.Fatal(err)
 	// 		}
 
-	// 		reconciler := newReconciler(machineScope)
+	// 		reconciler := newProviderVM(machineScope)
 
 	// 		var placement *ec2.Placement
 	// 		if tc.availabilityZone != "" && tc.subnet == "" {
@@ -479,7 +479,7 @@ func TestCreate(t *testing.T) {
 	// 		t.Fatal(err)
 	// 	}
 
-	// 	reconciler := newReconciler(machineScope)
+	// 	reconciler := newProviderVM(machineScope)
 
 	// 	// test create
 	// 	err = reconciler.create()
@@ -625,7 +625,7 @@ func TestGetMachineInstances(t *testing.T) {
 	// 			t.Fatal(err)
 	// 		}
 
-	// 		reconciler := newReconciler(machineScope)
+	// 		reconciler := newProviderVM(machineScope)
 
 	// 		instances, err := reconciler.getMachineInstances()
 	// 		if err != nil {

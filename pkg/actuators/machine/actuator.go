@@ -84,7 +84,7 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
 		return a.handleMachineError(machine, fmtErr, createEventAction)
 	}
-	if err := newReconciler(scope).create(); err != nil {
+	if err := newProviderVM(scope).create(); err != nil {
 		if err := scope.patchMachine(); err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 	if err != nil {
 		return false, fmt.Errorf(scopeFailFmt, machine.GetName(), err)
 	}
-	return newReconciler(scope).exists()
+	return newProviderVM(scope).exists()
 }
 
 // Update attempts to sync machine state with an existing instance.
@@ -127,7 +127,7 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 	}
 
 	previousResourceVersion := scope.machine.ResourceVersion
-	if err := newReconciler(scope).update(); err != nil {
+	if err := newProviderVM(scope).update(); err != nil {
 		// Update machine and machine status in case it was modified
 		if err := scope.patchMachine(); err != nil {
 			return err
@@ -163,7 +163,7 @@ func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error
 		fmtErr := fmt.Errorf(scopeFailFmt, machine.GetName(), err)
 		return a.handleMachineError(machine, fmtErr, deleteEventAction)
 	}
-	if err := newReconciler(scope).delete(); err != nil {
+	if err := newProviderVM(scope).delete(); err != nil {
 		if err := scope.patchMachine(); err != nil {
 			return err
 		}
