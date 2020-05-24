@@ -150,6 +150,7 @@ func providerStatusFromVirtualMachineStatus(virtualMachineStatus *kubevirtapiv1.
 func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, condition kubevirtapiv1.VirtualMachineCondition) error {
 	klog.Infof("%s: Updating status", s.machine.GetName())
 
+	//TODO: update the status -> from vm to the machine
 	networkAddresses := []corev1.NodeAddress{}
 
 	if vm != nil {

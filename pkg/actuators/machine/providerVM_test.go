@@ -1,639 +1,398 @@
 package machine
 
 import (
+	"errors"
 	"testing"
+
+	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetesclient "k8s.io/client-go/kubernetes"
+
+	"github.com/golang/mock/gomock"
+	kubevirtClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	mockkubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client/mock"
+	"gotest.tools/assert"
+	v1 "kubevirt.io/client-go/api/v1"
 )
 
-// func init() {
-// 	// Add types to scheme
-// 	machinev1.AddToScheme(scheme.Scheme)
-// }
+func initializeTest(t *testing.T, mockKubevirtClient *mockkubevirtclient.MockClient, labels map[string]string, providerID string) *machineScope {
+	machine, stubMachineErr := stubMachine(labels, providerID)
 
-func TestAvailabilityZone(t *testing.T) {
-	// cases := []struct {
-	// 	name             string
-	// 	availabilityZone string
-	// 	subnet           string
-	// 	expectedError    error
-	// }{
-	// 	{
-	// 		name:             "availability zone only",
-	// 		availabilityZone: "us-east-1a",
-	// 		expectedError:    errors.New("failed to launch instance: error getting subnet IDs: no subnet IDs were found"),
-	// 	},
-	// 	{
-	// 		name:   "subnet only",
-	// 		subnet: "subnet-b46032ec",
-	// 	},
-	// 	{
-	// 		name:             "availability zone and subnet",
-	// 		availabilityZone: "us-east-1a",
-	// 		subnet:           "subnet-b46032ec",
-	// 	},
-	// }
+	if stubMachineErr != nil {
+		t.Fatalf("Unable to build test machine manifest: %v", stubMachineErr)
+		return nil
+	}
 
-	// awsCredentialsSecret := stubAwsCredentialsSecret()
-	// userDataSecret := stubUserDataSecret()
+	machineScope, newMachineScopeErr := newMachineScope(machineScopeParams{
+		kubevirtClientBuilder: func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
+			return mockKubevirtClient, nil
+		},
+		machine:          machine,
+		kubernetesClient: nil,
+		Context:          nil,
+	})
 
-	// for _, tc := range cases {
-	// 	t.Run(tc.name, func(t *testing.T) {
-	// 		machine, err := stubMachine()
-	// 		if err != nil {
-	// 			t.Fatal(err)
-	// 		}
+	if newMachineScopeErr != nil {
+		t.Fatal(newMachineScopeErr)
+		return nil
+	}
 
-	// 		machinePc, err := awsproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
-	// 		if err != nil {
-	// 			t.Fatal(err)
-	// 		}
+	return machineScope
 
-	// 		// no load balancers tested
-	// 		machinePc.LoadBalancers = nil
-
-	// 		machinePc.Placement.AvailabilityZone = tc.availabilityZone
-	// 		if tc.subnet == "" {
-	// 			machinePc.Subnet.ID = nil
-	// 		} else {
-	// 			machinePc.Subnet.ID = aws.String(tc.subnet)
-	// 		}
-
-	// 		config, err := awsproviderv1.RawExtensionFromProviderSpec(machinePc)
-	// 		if err != nil {
-	// 			t.Fatal(err)
-	// 		}
-
-	// 		machine.Spec.ProviderSpec = machinev1.ProviderSpec{Value: config}
-
-	// 		fakeClient := fake.NewFakeClient(machine, awsCredentialsSecret, userDataSecret)
-
-	// 		mockCtrl := gomock.NewController(t)
-	// 		mockAWSClient := mockaws.NewMockClient(mockCtrl)
-
-	// 		machineScope, err := newMachineScope(machineScopeParams{
-	// 			client:  fakeClient,
-	// 			machine: machine,
-	// 			awsClientBuilder: func(client runtimeclient.Client, secretName, namespace, region string) (awsclient.Client, error) {
-	// 				return mockAWSClient, nil
-	// 			},
-	// 		})
-	// 		if err != nil {
-	// 			t.Fatal(err)
-	// 		}
-
-	// 		reconciler := newProviderVM(machineScope)
-
-	// 		var placement *ec2.Placement
-	// 		if tc.availabilityZone != "" && tc.subnet == "" {
-	// 			placement = &ec2.Placement{AvailabilityZone: aws.String(tc.availabilityZone)}
-	// 		}
-
-	// 		mockAWSClient.EXPECT().RunInstances(placementMatcher{placement}).Return(
-	// 			&ec2.Reservation{
-	// 				Instances: []*ec2.Instance{
-	// 					{
-	// 						ImageId:    aws.String("ami-a9acbbd6"),
-	// 						InstanceId: aws.String("i-02fcb933c5da7085c"),
-	// 						State: &ec2.InstanceState{
-	// 							Name: aws.String(ec2.InstanceStateNameRunning),
-	// 						},
-	// 						LaunchTime: aws.Time(time.Now()),
-	// 						Placement: &ec2.Placement{
-	// 							AvailabilityZone: aws.String("us-east-1a"),
-	// 						},
-	// 					},
-	// 				},
-	// 			}, nil)
-
-	// 		mockAWSClient.EXPECT().DescribeInstances(gomock.Any()).Return(
-	// 			&ec2.DescribeInstancesOutput{
-	// 				Reservations: []*ec2.Reservation{
-	// 					{
-	// 						Instances: []*ec2.Instance{
-	// 							{
-	// 								ImageId:    aws.String("ami-a9acbbd6"),
-	// 								InstanceId: aws.String("i-02fcb933c5da7085c"),
-	// 								State: &ec2.InstanceState{
-	// 									Name: aws.String(ec2.InstanceStateNameRunning),
-	// 									Code: aws.Int64(16),
-	// 								},
-	// 								LaunchTime: aws.Time(time.Now()),
-	// 							},
-	// 						},
-	// 					},
-	// 				},
-	// 			}, nil).AnyTimes()
-
-	// 		mockAWSClient.EXPECT().TerminateInstances(gomock.Any()).Return(&ec2.TerminateInstancesOutput{}, nil)
-	// 		mockAWSClient.EXPECT().RegisterInstancesWithLoadBalancer(gomock.Any()).AnyTimes()
-	// 		mockAWSClient.EXPECT().DescribeAvailabilityZones(gomock.Any()).Return(nil, nil).AnyTimes()
-	// 		mockAWSClient.EXPECT().DescribeSubnets(gomock.Any()).Return(&ec2.DescribeSubnetsOutput{}, nil)
-
-	// 		err = reconciler.create()
-	// 		if tc.expectedError != nil {
-	// 			if err == nil {
-	// 				t.Error("reconciler was expected to return error")
-	// 			}
-	// 			if err.Error() != tc.expectedError.Error() {
-	// 				t.Errorf("Expected: %v, got %v", tc.expectedError, err)
-	// 			}
-	// 		} else {
-	// 			if err != nil {
-	// 				t.Errorf("reconciler was not expected to return error: %v", err)
-	// 			}
-	// 		}
-	// 	})
-	// }
 }
-
-// type placementMatcher struct {
-// 	placement *ec2.Placement
-// }
-
-// func (m placementMatcher) Matches(input interface{}) bool {
-// 	runInstancesInput, ok := input.(*ec2.RunInstancesInput)
-// 	if !ok {
-// 		return false
-// 	}
-// 	if runInstancesInput.Placement == m.placement {
-// 		return true
-// 	}
-// 	return false
-// }
-
-// func (m placementMatcher) String() string {
-// 	return fmt.Sprintf("is placement: %#v", m.placement)
-// }
-
 func TestCreate(t *testing.T) {
-	// // mock aws API calls
-	// mockCtrl := gomock.NewController(t)
-	// mockAWSClient := mockaws.NewMockClient(mockCtrl)
-	// mockAWSClient.EXPECT().DescribeSecurityGroups(gomock.Any()).Return(nil, fmt.Errorf("describeSecurityGroups error")).AnyTimes()
-	// mockAWSClient.EXPECT().DescribeAvailabilityZones(gomock.Any()).Return(nil, fmt.Errorf("describeAvailabilityZones error")).AnyTimes()
-	// mockAWSClient.EXPECT().DescribeImages(gomock.Any()).Return(nil, fmt.Errorf("describeImages error")).AnyTimes()
-	// mockAWSClient.EXPECT().DescribeInstances(gomock.Any()).Return(stubDescribeInstancesOutput("ami-a9acbbd6", "i-02fcb933c5da7085c", ec2.InstanceStateNameRunning), nil).AnyTimes()
-	// mockAWSClient.EXPECT().TerminateInstances(gomock.Any()).Return(&ec2.TerminateInstancesOutput{}, nil).AnyTimes()
-	// mockAWSClient.EXPECT().RunInstances(gomock.Any()).Return(stubReservation("ami-a9acbbd6", "i-02fcb933c5da7085c"), nil).AnyTimes()
-	// mockAWSClient.EXPECT().RegisterInstancesWithLoadBalancer(gomock.Any()).Return(nil, nil).AnyTimes()
-	// mockAWSClient.EXPECT().ELBv2DescribeLoadBalancers(gomock.Any()).Return(stubDescribeLoadBalancersOutput(), nil)
-	// mockAWSClient.EXPECT().ELBv2DescribeTargetGroups(gomock.Any()).Return(stubDescribeTargetGroupsOutput(), nil).AnyTimes()
-	// mockAWSClient.EXPECT().ELBv2RegisterTargets(gomock.Any()).Return(nil, nil).AnyTimes()
+	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	cases := []struct {
+		name                   string
+		wantValidateMachineErr error
+		wantCreateErr          error
+		labels                 map[string]string
+		providerID             string
+	}{
+		{
+			name:                   "Create a VM",
+			wantValidateMachineErr: nil,
+			wantCreateErr:          nil,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Create a VM from unlabeled machine and fail",
+			wantValidateMachineErr: errors.New("failed validating machine provider spec"),
+			wantCreateErr:          nil,
+			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
+			providerID:             nil,
+		},
+		{
+			name:                   "Create a VM with an error in the client-go and fail",
+			wantValidateMachineErr: nil,
+			wantCreateErr:          errors.New("failed to create virtual machine"),
+			labels:                 nil,
+			providerID:             nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
+			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machineScope == nil {
+				return
+			}
 
-	// testCases := []struct {
-	// 	testcase             string
-	// 	providerConfig       *awsproviderv1.AWSMachineProviderConfig
-	// 	userDataSecret       *corev1.Secret
-	// 	awsCredentialsSecret *corev1.Secret
-	// 	expectedError        error
-	// }{
-	// 	{
-	// 		testcase: "Create succeed",
-	// 		providerConfig: &awsproviderv1.AWSMachineProviderConfig{
-	// 			AMI: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("ami-a9acbbd6"),
-	// 			},
-	// 			CredentialsSecret: &corev1.LocalObjectReference{
-	// 				Name: awsCredentialsSecretName,
-	// 			},
-	// 			InstanceType: "m4.xlarge",
-	// 			Placement: awsproviderv1.Placement{
-	// 				Region:           region,
-	// 				AvailabilityZone: defaultAvailabilityZone,
-	// 			},
-	// 			Subnet: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("subnet-0e56b13a64ff8a941"),
-	// 			},
-	// 			IAMInstanceProfile: &awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("openshift_master_launch_instances"),
-	// 			},
-	// 			KeyName: aws.String(keyName),
-	// 			UserDataSecret: &corev1.LocalObjectReference{
-	// 				Name: userDataSecretName,
-	// 			},
-	// 			Tags: []awsproviderv1.TagSpecification{
-	// 				{Name: "openshift-node-group-config", Value: "node-config-master"},
-	// 				{Name: "host-type", Value: "master"},
-	// 				{Name: "sub-host-type", Value: "default"},
-	// 			},
-	// 			SecurityGroups: []awsproviderv1.AWSResourceReference{
-	// 				{ID: aws.String("sg-00868b02fbe29de17")},
-	// 				{ID: aws.String("sg-0a4658991dc5eb40a")},
-	// 				{ID: aws.String("sg-009a70e28fa4ba84e")},
-	// 				{ID: aws.String("sg-07323d56fb932c84c")},
-	// 				{ID: aws.String("sg-08b1ffd32874d59a2")},
-	// 			},
-	// 			PublicIP: aws.Bool(true),
-	// 			LoadBalancers: []awsproviderv1.LoadBalancerReference{
-	// 				{
-	// 					Name: "cluster-con",
-	// 					Type: awsproviderv1.ClassicLoadBalancerType,
-	// 				},
-	// 				{
-	// 					Name: "cluster-ext",
-	// 					Type: awsproviderv1.ClassicLoadBalancerType,
-	// 				},
-	// 				{
-	// 					Name: "cluster-int",
-	// 					Type: awsproviderv1.ClassicLoadBalancerType,
-	// 				},
-	// 				{
-	// 					Name: "cluster-net-lb",
-	// 					Type: awsproviderv1.NetworkLoadBalancerType,
-	// 				},
-	// 			},
-	// 		},
-	// 		userDataSecret:       stubUserDataSecret(),
-	// 		awsCredentialsSecret: stubAwsCredentialsSecret(),
-	// 		expectedError:        nil,
-	// 	},
-	// 	{
-	// 		testcase: "Bad userData",
-	// 		providerConfig: &awsproviderv1.AWSMachineProviderConfig{
-	// 			AMI: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("ami-a9acbbd6"),
-	// 			},
-	// 			CredentialsSecret: &corev1.LocalObjectReference{
-	// 				Name: awsCredentialsSecretName,
-	// 			},
-	// 			InstanceType: "m4.xlarge",
-	// 			Placement: awsproviderv1.Placement{
-	// 				Region:           region,
-	// 				AvailabilityZone: defaultAvailabilityZone,
-	// 			},
-	// 			Subnet: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("subnet-0e56b13a64ff8a941"),
-	// 			},
-	// 			IAMInstanceProfile: &awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("openshift_master_launch_instances"),
-	// 			},
-	// 			KeyName: aws.String(keyName),
-	// 			UserDataSecret: &corev1.LocalObjectReference{
-	// 				Name: userDataSecretName,
-	// 			},
-	// 			Tags: []awsproviderv1.TagSpecification{
-	// 				{Name: "openshift-node-group-config", Value: "node-config-master"},
-	// 				{Name: "host-type", Value: "master"},
-	// 				{Name: "sub-host-type", Value: "default"},
-	// 			},
-	// 			SecurityGroups: []awsproviderv1.AWSResourceReference{
-	// 				{ID: aws.String("sg-00868b02fbe29de17")},
-	// 				{ID: aws.String("sg-0a4658991dc5eb40a")},
-	// 				{ID: aws.String("sg-009a70e28fa4ba84e")},
-	// 				{ID: aws.String("sg-07323d56fb932c84c")},
-	// 				{ID: aws.String("sg-08b1ffd32874d59a2")},
-	// 			},
-	// 			PublicIP: aws.Bool(true),
-	// 			LoadBalancers: []awsproviderv1.LoadBalancerReference{
-	// 				{
-	// 					Name: "cluster-con",
-	// 					Type: awsproviderv1.ClassicLoadBalancerType,
-	// 				},
-	// 				{
-	// 					Name: "cluster-ext",
-	// 					Type: awsproviderv1.ClassicLoadBalancerType,
-	// 				},
-	// 				{
-	// 					Name: "cluster-int",
-	// 					Type: awsproviderv1.ClassicLoadBalancerType,
-	// 				},
-	// 				{
-	// 					Name: "cluster-net-lb",
-	// 					Type: awsproviderv1.NetworkLoadBalancerType,
-	// 				},
-	// 			},
-	// 		},
-	// 		userDataSecret: &corev1.Secret{
-	// 			ObjectMeta: metav1.ObjectMeta{
-	// 				Name:      userDataSecretName,
-	// 				Namespace: defaultNamespace,
-	// 			},
-	// 			Data: map[string][]byte{
-	// 				"badKey": []byte(userDataBlob),
-	// 			},
-	// 		},
-	// 		awsCredentialsSecret: stubAwsCredentialsSecret(),
-	// 		expectedError:        errors.New("failed to get user data: secret default/aws-actuator-user-data-secret missing userData key"),
-	// 	},
-	// 	{
-	// 		testcase: "Failed security groups return invalid config machine error",
-	// 		providerConfig: &awsproviderv1.AWSMachineProviderConfig{
-	// 			AMI: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("ami-a9acbbd6"),
-	// 			},
-	// 			CredentialsSecret: &corev1.LocalObjectReference{
-	// 				Name: awsCredentialsSecretName,
-	// 			},
-	// 			InstanceType: "m4.xlarge",
-	// 			Placement: awsproviderv1.Placement{
-	// 				Region:           region,
-	// 				AvailabilityZone: defaultAvailabilityZone,
-	// 			},
-	// 			Subnet: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("subnet-0e56b13a64ff8a941"),
-	// 			},
-	// 			IAMInstanceProfile: &awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("openshift_master_launch_instances"),
-	// 			},
-	// 			KeyName: aws.String(keyName),
-	// 			UserDataSecret: &corev1.LocalObjectReference{
-	// 				Name: userDataSecretName,
-	// 			},
-	// 			Tags: []awsproviderv1.TagSpecification{
-	// 				{Name: "openshift-node-group-config", Value: "node-config-master"},
-	// 				{Name: "host-type", Value: "master"},
-	// 				{Name: "sub-host-type", Value: "default"},
-	// 			},
-	// 			SecurityGroups: []awsproviderv1.AWSResourceReference{{
-	// 				Filters: []awsproviderv1.Filter{{
-	// 					Name:   "tag:Name",
-	// 					Values: []string{fmt.Sprintf("%s-%s-sg", clusterID, "role")},
-	// 				}},
-	// 			}},
-	// 			PublicIP: aws.Bool(true),
-	// 		},
-	// 		userDataSecret:       stubUserDataSecret(),
-	// 		awsCredentialsSecret: stubAwsCredentialsSecret(),
-	// 		expectedError:        errors.New("failed to launch instance: error getting security groups IDs: error describing security groups: describeSecurityGroups error"),
-	// 	},
-	// 	{
-	// 		testcase: "Failed Availability zones return invalid config machine error",
-	// 		providerConfig: &awsproviderv1.AWSMachineProviderConfig{
-	// 			AMI: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("ami-a9acbbd6"),
-	// 			},
-	// 			CredentialsSecret: &corev1.LocalObjectReference{
-	// 				Name: awsCredentialsSecretName,
-	// 			},
-	// 			InstanceType: "m4.xlarge",
-	// 			Placement: awsproviderv1.Placement{
-	// 				Region:           region,
-	// 				AvailabilityZone: defaultAvailabilityZone,
-	// 			},
-	// 			Subnet: awsproviderv1.AWSResourceReference{
-	// 				Filters: []awsproviderv1.Filter{{
-	// 					Name:   "tag:Name",
-	// 					Values: []string{fmt.Sprintf("%s-private-%s", clusterID, "az")},
-	// 				}},
-	// 			},
-	// 			IAMInstanceProfile: &awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("openshift_master_launch_instances"),
-	// 			},
-	// 			KeyName: aws.String(keyName),
-	// 			UserDataSecret: &corev1.LocalObjectReference{
-	// 				Name: userDataSecretName,
-	// 			},
-	// 			Tags: []awsproviderv1.TagSpecification{
-	// 				{Name: "openshift-node-group-config", Value: "node-config-master"},
-	// 				{Name: "host-type", Value: "master"},
-	// 				{Name: "sub-host-type", Value: "default"},
-	// 			},
-	// 			SecurityGroups: []awsproviderv1.AWSResourceReference{
-	// 				{ID: aws.String("sg-00868b02fbe29de17")},
-	// 				{ID: aws.String("sg-0a4658991dc5eb40a")},
-	// 				{ID: aws.String("sg-009a70e28fa4ba84e")},
-	// 				{ID: aws.String("sg-07323d56fb932c84c")},
-	// 				{ID: aws.String("sg-08b1ffd32874d59a2")},
-	// 			},
-	// 			PublicIP: aws.Bool(true),
-	// 		},
-	// 		userDataSecret:       stubUserDataSecret(),
-	// 		awsCredentialsSecret: stubAwsCredentialsSecret(),
-	// 		expectedError:        errors.New("failed to launch instance: error getting subnet IDs: error describing availability zones: describeAvailabilityZones error"),
-	// 	},
-	// 	{
-	// 		testcase: "Failed BlockDevices return invalid config machine error",
-	// 		providerConfig: &awsproviderv1.AWSMachineProviderConfig{
-	// 			AMI: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("ami-a9acbbd6"),
-	// 			},
-	// 			CredentialsSecret: &corev1.LocalObjectReference{
-	// 				Name: awsCredentialsSecretName,
-	// 			},
-	// 			InstanceType: "m4.xlarge",
-	// 			Placement: awsproviderv1.Placement{
-	// 				Region:           region,
-	// 				AvailabilityZone: defaultAvailabilityZone,
-	// 			},
-	// 			BlockDevices: []awsproviderv1.BlockDeviceMappingSpec{
-	// 				{
-	// 					EBS: &awsproviderv1.EBSBlockDeviceSpec{
-	// 						VolumeType: pointer.StringPtr("type"),
-	// 						VolumeSize: pointer.Int64Ptr(int64(1)),
-	// 						Iops:       pointer.Int64Ptr(int64(1)),
-	// 					},
-	// 				},
-	// 			},
-	// 			Subnet: awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("subnet-0e56b13a64ff8a941"),
-	// 			},
-	// 			IAMInstanceProfile: &awsproviderv1.AWSResourceReference{
-	// 				ID: aws.String("openshift_master_launch_instances"),
-	// 			},
-	// 			KeyName: aws.String(keyName),
-	// 			UserDataSecret: &corev1.LocalObjectReference{
-	// 				Name: userDataSecretName,
-	// 			},
-	// 			Tags: []awsproviderv1.TagSpecification{
-	// 				{Name: "openshift-node-group-config", Value: "node-config-master"},
-	// 				{Name: "host-type", Value: "master"},
-	// 				{Name: "sub-host-type", Value: "default"},
-	// 			},
-	// 			SecurityGroups: []awsproviderv1.AWSResourceReference{
-	// 				{ID: aws.String("sg-00868b02fbe29de17")},
-	// 				{ID: aws.String("sg-0a4658991dc5eb40a")},
-	// 				{ID: aws.String("sg-009a70e28fa4ba84e")},
-	// 				{ID: aws.String("sg-07323d56fb932c84c")},
-	// 				{ID: aws.String("sg-08b1ffd32874d59a2")},
-	// 			},
-	// 			PublicIP: aws.Bool(true),
-	// 		},
-	// 		userDataSecret:       stubUserDataSecret(),
-	// 		awsCredentialsSecret: stubAwsCredentialsSecret(),
-	// 		expectedError:        errors.New("failed to launch instance: error getting blockDeviceMappings: error describing AMI: describeImages error"),
-	// 	},
-	// }
-	// for _, tc := range testCases {
-	// 	// create fake resources
-	// 	t.Logf("testCase: %v", tc.testcase)
+			mockKubevirtClient.EXPECT().CreateVirtualMachine(defaultNamespace, machineScope.virtualMachine).Return(machineScope.virtualMachine, tc.wantCreateErr).Times(1)
 
-	// 	encodedProviderConfig, err := awsproviderv1.RawExtensionFromProviderSpec(tc.providerConfig)
-	// 	if err != nil {
-	// 		t.Fatalf("Unexpected error")
-	// 	}
-	// 	machine, err := stubMachine()
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
-	// 	machine.Spec.ProviderSpec = machinev1.ProviderSpec{Value: encodedProviderConfig}
+			createVMErr := providerVM{machineScope}.create()
+			if tc.wantValidateMachineErr != nil {
+				assert.Equal(t, tc.wantValidateMachineErr, createVMErr)
+			} else if tc.wantCreateErr != nil {
+				assert.Equal(t, tc.wantCreateErr, createVMErr)
+			} else {
+				assert.Equal(t, createVMErr, nil)
+			}
+		})
+	}
 
-	// 	fakeClient := fake.NewFakeClientWithScheme(scheme.Scheme, machine, tc.awsCredentialsSecret, tc.userDataSecret)
-
-	// 	machineScope, err := newMachineScope(machineScopeParams{
-	// 		client:  fakeClient,
-	// 		machine: machine,
-	// 		awsClientBuilder: func(client runtimeclient.Client, secretName, namespace, region string) (awsclient.Client, error) {
-	// 			return mockAWSClient, nil
-	// 		},
-	// 	})
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
-
-	// 	reconciler := newProviderVM(machineScope)
-
-	// 	// test create
-	// 	err = reconciler.create()
-	// 	if tc.expectedError != nil {
-	// 		if err == nil {
-	// 			t.Error("reconciler was expected to return error")
-	// 		}
-	// 		if err.Error() != tc.expectedError.Error() {
-	// 			t.Errorf("Expected: %v, got %v", tc.expectedError, err)
-	// 		}
-	// 	} else {
-	// 		if err != nil {
-	// 			t.Errorf("reconciler was not expected to return error: %v", err)
-	// 		}
-	// 	}
-	// }
 }
 
-func TestGetMachineInstances(t *testing.T) {
-	// clusterID := "aws-actuator-cluster"
-	// instanceID := "i-02fa4197109214b46"
-	// imageID := "ami-a9acbbd6"
+func TestDelete(t *testing.T) {
+	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	cases := []struct {
+		name                   string
+		wantValidateMachineErr error
+		wantGetErr             error
+		wantDeleteErr          error
+		emptyGetVM             bool
+		labels                 map[string]string
+		providerID             string
+	}{
+		{
+			name:                   "Delete a VM successfully",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			wantDeleteErr:          nil,
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Delete a VM from unlabeled machine and fail",
+			wantValidateMachineErr: errors.New("failed validating machine provider spec"),
+			wantGetErr:             nil,
+			wantDeleteErr:          nil,
+			emptyGetVM:             false,
+			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
+			providerID:             nil,
+		},
+		{
+			name:                   "Delete deleting VM with getting error and fail",
+			wantValidateMachineErr: nil,
+			wantGetErr:             errors.New("ferror getting existing VM"),
+			wantDeleteErr:          nil,
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Delete a nonexistent VM and fail",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			wantDeleteErr:          nil,
+			emptyGetVM:             true,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Delete a VM with an error in the client-go and fail",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			wantDeleteErr:          errors.New("failed to delete virtual machine"),
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
 
-	// machine, err := stubMachine()
-	// if err != nil {
-	// 	t.Fatalf("unable to build stub machine: %v", err)
-	// }
+			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machineScope == nil {
+				return
+			}
 
-	// awsCredentialsSecret := stubAwsCredentialsSecret()
-	// userDataSecret := stubUserDataSecret()
+			returnVm := machineScope.virtualMachine
+			if tc.emptyGetVM {
+				returnVm = nil
+			}
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name).Return(returnVm, tc.wantGetErr).Times(1)
 
-	// testCases := []struct {
-	// 	testcase       string
-	// 	providerStatus awsproviderv1.AWSMachineProviderStatus
-	// 	awsClientFunc  func(*gomock.Controller) awsclient.Client
-	// 	exists         bool
-	// }{
-	// 	{
-	// 		testcase:       "empty-status-search-by-tag",
-	// 		providerStatus: awsproviderv1.AWSMachineProviderStatus{},
-	// 		awsClientFunc: func(ctrl *gomock.Controller) awsclient.Client {
-	// 			mockAWSClient := mockaws.NewMockClient(ctrl)
+			//TODO : understand if is it good like that
+			//gracePeriod := int64(10)
+			//mockKubevirtClient.EXPECT().DeleteVirtualMachine(defaultNamespace, machineScope.virtualMachine, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod}).Return(machineScope.virtualMachine, nil).AnyTimes()
+			mockKubevirtClient.EXPECT().DeleteVirtualMachine(defaultNamespace, machineScope.virtualMachine, gomock.Any()).Return(tc.wantDeleteErr).Times(1)
 
-	// 			request := &ec2.DescribeInstancesInput{
-	// 				Filters: []*ec2.Filter{
-	// 					{
-	// 						Name:   awsTagFilter("Name"),
-	// 						Values: aws.StringSlice([]string{machine.Name}),
-	// 					},
+			deleteVMErr := providerVM{machineScope}.delete()
 
-	// 					clusterFilter(clusterID),
-	// 				},
-	// 			}
+			if tc.wantValidateMachineErr != nil {
+				assert.Equal(t, tc.wantValidateMachineErr, deleteVMErr)
+			} else if tc.wantGetErr != nil {
+				assert.Equal(t, tc.wantGetErr, deleteVMErr)
+			} else if tc.wantDeleteErr != nil {
+				assert.Equal(t, tc.wantDeleteErr, deleteVMErr)
+			} else {
+				assert.Equal(t, deleteVMErr, nil)
+			}
+		})
+	}
 
-	// 			mockAWSClient.EXPECT().DescribeInstances(request).Return(
-	// 				stubDescribeInstancesOutput(imageID, instanceID, ec2.InstanceStateNameRunning),
-	// 				nil,
-	// 			).Times(1)
+}
 
-	// 			return mockAWSClient
-	// 		},
-	// 		exists: true,
-	// 	},
-	// 	{
-	// 		testcase: "has-status-search-by-id-running",
-	// 		providerStatus: awsproviderv1.AWSMachineProviderStatus{
-	// 			InstanceID: aws.String(instanceID),
-	// 		},
-	// 		awsClientFunc: func(ctrl *gomock.Controller) awsclient.Client {
-	// 			mockAWSClient := mockaws.NewMockClient(ctrl)
+func TestExists(t *testing.T) {
+	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	cases := []struct {
+		name                   string
+		wantValidateMachineErr error
+		wantGetErr             error
+		emptyGetVM             bool
+		isExist                bool
+		labels                 map[string]string
+		providerID             string
+	}{
+		{
+			name:                   "Validate existence VM",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			emptyGetVM:             false,
+			isExist:                true,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Validate non existence VM",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			emptyGetVM:             true,
+			isExist:                false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Validate existence VM with unlabeled machine and fail",
+			wantValidateMachineErr: errors.New("failed validating machine provider spec"),
+			wantGetErr:             nil,
+			emptyGetVM:             false,
+			isExist:                true,
+			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
+			providerID:             nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
+			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machineScope == nil {
+				return
+			}
 
-	// 			request := &ec2.DescribeInstancesInput{
-	// 				InstanceIds: aws.StringSlice([]string{instanceID}),
-	// 			}
+			returnVm := machineScope.virtualMachine
+			if tc.emptyGetVM {
+				returnVm = nil
+			}
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name).Return(returnVm, tc.wantGetErr).Times(1)
 
-	// 			mockAWSClient.EXPECT().DescribeInstances(request).Return(
-	// 				stubDescribeInstancesOutput(imageID, instanceID, ec2.InstanceStateNameRunning),
-	// 				nil,
-	// 			).Times(1)
+			existsVM, existsVMErr := providerVM{machineScope}.exists()
 
-	// 			return mockAWSClient
-	// 		},
-	// 		exists: true,
-	// 	},
-	// 	{
-	// 		testcase: "has-status-search-by-id-terminated",
-	// 		providerStatus: awsproviderv1.AWSMachineProviderStatus{
-	// 			InstanceID: aws.String(instanceID),
-	// 		},
-	// 		awsClientFunc: func(ctrl *gomock.Controller) awsclient.Client {
-	// 			mockAWSClient := mockaws.NewMockClient(ctrl)
+			if tc.wantValidateMachineErr != nil {
+				assert.Equal(t, tc.wantValidateMachineErr, existsVMErr)
+			} else if tc.wantGetErr != nil {
+				assert.Equal(t, tc.wantGetErr, existsVMErr)
+			} else if tc.emptyGetVM {
+				assert.Equal(t, existsVMErr, nil)
+				assert.Equal(t, existsVM, false)
+			} else {
+				assert.Equal(t, existsVMErr, nil)
+				assert.Equal(t, existsVM, tc.isExist)
+			}
+		})
+	}
 
-	// 			first := mockAWSClient.EXPECT().DescribeInstances(&ec2.DescribeInstancesInput{
-	// 				InstanceIds: aws.StringSlice([]string{instanceID}),
-	// 			}).Return(
-	// 				stubDescribeInstancesOutput(imageID, instanceID, ec2.InstanceStateNameTerminated),
-	// 				nil,
-	// 			).Times(1)
+}
 
-	// 			mockAWSClient.EXPECT().DescribeInstances(&ec2.DescribeInstancesInput{
-	// 				Filters: []*ec2.Filter{
-	// 					{
-	// 						Name:   awsTagFilter("Name"),
-	// 						Values: aws.StringSlice([]string{machine.Name}),
-	// 					},
+func TestUpdate(t *testing.T) {
+	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	cases := []struct {
+		name                   string
+		wantValidateMachineErr error
+		wantGetErr             error
+		wantUpdateeErr         error
+		emptyGetVM             bool
+		labels                 map[string]string
+		providerID             string
+	}{
+		{
+			name:                   "Update a VM",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			wantUpdateeErr:         nil,
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Update a VM from unlabeled machine and fail",
+			wantValidateMachineErr: errors.New("failed validating machine provider spec"),
+			wantGetErr:             nil,
+			wantUpdateeErr:         nil,
+			emptyGetVM:             false,
+			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
+			providerID:             nil,
+		},
+		{
+			name:                   "Update a VM with getting error and fail",
+			wantValidateMachineErr: nil,
+			wantGetErr:             errors.New("error getting existing VM"),
+			wantUpdateeErr:         nil,
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+		{
+			name:                   "Update a nonexistent VM and fail",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			wantUpdateeErr:         nil,
+			emptyGetVM:             true,
+			labels:                 nil,
+			providerID:             nil,
+		},
 
-	// 					clusterFilter(clusterID),
-	// 				},
-	// 			}).Return(
-	// 				stubDescribeInstancesOutput(imageID, instanceID, ec2.InstanceStateNameTerminated),
-	// 				nil,
-	// 			).Times(1).After(first)
+		{
+			name:                   "Delete a VM with an error in the client-go and fail",
+			wantValidateMachineErr: nil,
+			wantGetErr:             nil,
+			wantUpdateeErr:         errors.New("failed to update virtual machine"),
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
+			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machineScope == nil {
+				return
+			}
 
-	// 			return mockAWSClient
-	// 		},
-	// 	},
-	// }
+			returnVm := machineScope.virtualMachine
+			if tc.emptyGetVM {
+				returnVm = nil
+			}
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name).Return(returnVm, tc.wantGetErr).Times(1)
+			mockKubevirtClient.EXPECT().UpdateVirtualMachine(defaultNamespace, machineScope.virtualMachine).Return(machineScope.virtualMachine, tc.wantUpdateeErr).Times(1)
+			// TODO: added cases when existingVM == nil :
+			// p.machine.Spec.ProviderID != nil && *p.machine.Spec.ProviderID != "" && (p.machine.Status.LastUpdated == nil || p.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) - return error
+			// else - another error
+			updateVMErr := providerVM{machineScope}.update()
 
-	// for _, tc := range testCases {
-	// 	t.Run(tc.testcase, func(t *testing.T) {
-	// 		ctrl := gomock.NewController(t)
-	// 		defer ctrl.Finish()
+			if tc.wantValidateMachineErr != nil {
+				assert.Equal(t, tc.wantValidateMachineErr, updateVMErr)
+			} else if tc.wantGetErr != nil {
+				assert.Equal(t, tc.wantGetErr, updateVMErr)
+			} else if tc.wantUpdateeErr != nil {
+				assert.Equal(t, tc.wantUpdateeErr, updateVMErr)
+			} else {
+				assert.Equal(t, updateVMErr, nil)
+				//providerID := fmt.Sprintf("kubevirt:///%s/%s", machineScope.machine.GetNamespace(), machineScope.virtualMachine.GetName())
+				assert.Equal(t, machineScope.machine.Spec.ProviderID, tc.providerID)
+			}
+		})
+	}
 
-	// 		awsStatusRaw, err := awsproviderv1.RawExtensionFromProviderStatus(&tc.providerStatus)
-	// 		if err != nil {
-	// 			t.Fatal(err)
-	// 		}
+}
 
-	// 		machineCopy := machine.DeepCopy()
-	// 		machineCopy.Status.ProviderStatus = awsStatusRaw
+func DefaultVirtualMachine(started bool) (*v1.VirtualMachine, *v1.VirtualMachineInstance) {
+	return DefaultVirtualMachineWithNames(started, "testvmi", "testvmi")
+}
 
-	// 		fakeClient := fake.NewFakeClientWithScheme(scheme.Scheme, machine, awsCredentialsSecret, userDataSecret)
-	// 		mockAWSClient := tc.awsClientFunc(ctrl)
+func DefaultVirtualMachineWithNames(started bool, vmName string, vmiName string) (*v1.VirtualMachine, *v1.VirtualMachineInstance) {
+	vmi := v1.NewMinimalVMI(vmiName)
+	vmi.Status.Phase = v1.Running
+	vm := VirtualMachineFromVMI(vmName, vmi, started)
+	t := true
+	vmi.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion:         v1.VirtualMachineGroupVersionKind.GroupVersion().String(),
+		Kind:               v1.VirtualMachineGroupVersionKind.Kind,
+		Name:               vm.ObjectMeta.Name,
+		UID:                vm.ObjectMeta.UID,
+		Controller:         &t,
+		BlockOwnerDeletion: &t,
+	}}
+	return vm, vmi
+}
 
-	// 		machineScope, err := newMachineScope(machineScopeParams{
-	// 			client:  fakeClient,
-	// 			machine: machineCopy,
-	// 			awsClientBuilder: func(client runtimeclient.Client, secretName, namespace, region string) (awsclient.Client, error) {
-	// 				return mockAWSClient, nil
-	// 			},
-	// 		})
-	// 		if err != nil {
-	// 			t.Fatal(err)
-	// 		}
-
-	// 		reconciler := newProviderVM(machineScope)
-
-	// 		instances, err := reconciler.getMachineInstances()
-	// 		if err != nil {
-	// 			t.Errorf("Unexpected error from getMachineInstances: %v", err)
-	// 		}
-	// 		if tc.exists != (len(instances) > 0) {
-	// 			t.Errorf("Expected instance exists: %t, got instances: %v", tc.exists, instances)
-	// 		}
-	// 	})
-	// }
+func VirtualMachineFromVMI(name string, vmi *v1.VirtualMachineInstance, started bool) *v1.VirtualMachine {
+	vm := &v1.VirtualMachine{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: vmi.ObjectMeta.Namespace, ResourceVersion: "1"},
+		Spec: v1.VirtualMachineSpec{
+			Running: &started,
+			Template: &v1.VirtualMachineInstanceTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   vmi.ObjectMeta.Name,
+					Labels: vmi.ObjectMeta.Labels,
+				},
+				Spec: vmi.Spec,
+			},
+		},
+	}
+	return vm
 }

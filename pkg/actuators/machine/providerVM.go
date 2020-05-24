@@ -70,10 +70,10 @@ func (p *providerVM) delete() error {
 		return fmt.Errorf("%v: failed validating machine provider spec: %w", p.machine.GetName(), validateMachineErr)
 	}
 
-	existingVM, err := p.getVM(p.virtualMachine.GetName())
-	if err != nil {
-		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
-		return err
+	existingVM, existingVMErr := p.getVM(p.virtualMachine.GetName())
+	if existingVMErr != nil {
+		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), existingVMErr)
+		return existingVMErr
 	}
 
 	if existingVM == nil {
@@ -81,8 +81,8 @@ func (p *providerVM) delete() error {
 		return nil
 	}
 
-	if err := p.deleteVM(p.virtualMachine.GetName()); err != nil {
-		return fmt.Errorf("failed to delete VM: %w", err)
+	if deleteVMErr := p.deleteVM(p.virtualMachine.GetName()); deleteVMErr != nil {
+		return fmt.Errorf("failed to delete VM: %w", deleteVMErr)
 	}
 
 	klog.Infof("Deleted machine %v", p.machine.GetName())
@@ -98,10 +98,10 @@ func (p *providerVM) update() error {
 		return fmt.Errorf("%v: failed validating machine provider spec: %w", p.machine.GetName(), validateMachineErr)
 	}
 
-	existingVM, err := p.getVM(p.virtualMachine.GetName())
-	if err != nil {
-		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
-		return err
+	existingVM, existingVMErr := p.getVM(p.virtualMachine.GetName())
+	if existingVMErr != nil {
+		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), existingVMErr)
+		return existingVMErr
 	}
 
 	//TODO Danielle - update ProviderID to lowercase
@@ -124,7 +124,7 @@ func (p *providerVM) update() error {
 	updatedVm, updateVMErr := p.updateVM(p.virtualMachine)
 
 	if updateVMErr != nil {
-		return fmt.Errorf("failed to update VM : %w", err)
+		return fmt.Errorf("failed to update VM : %w", existingVMErr)
 	}
 	if setIDErr := p.setProviderID(updatedVm); setIDErr != nil {
 		return fmt.Errorf("failed to update machine object with providerID: %w", setIDErr)
@@ -143,7 +143,7 @@ func (p *providerVM) update() error {
 // exists returns true if machine exists.
 func (p *providerVM) exists() (bool, error) {
 	existingVM, err := p.getVM(p.virtualMachine.GetName())
-	if err != nil || existingVM == nil {
+	if err != nil || existingVM == nil || existingVM.Name != p.virtualMachine.GetName() || existingVM.Namespace != p.virtualMachine.GetNamespace() {
 		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
 	}
 	return true, err
@@ -231,11 +231,11 @@ func (p *providerVM) isMaster() (bool, error) {
 
 // setProviderID adds providerID in the machine spec
 func (p *providerVM) setProviderID(vm *kubevirtapiv1.VirtualMachine) error {
+	// TODO: return an error when the setting is failed
 	existingProviderID := p.machine.Spec.ProviderID
 	if vm == nil {
 		return nil
 	}
-	// TODO what is the right providerID structure?
 	providerID := fmt.Sprintf("kubevirt:///%s/%s", p.machine.GetNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
@@ -267,12 +267,17 @@ func (p *providerVM) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.VirtualM
 	// TODO which labels/annotations need to assign here?
 	// Reaching to machine provider config since the region is not directly
 	// providing by *kubevirtapiv1.VirtualMachine object
-	// machineProviderConfig, err := kubevirtproviderv1.ProviderSpecFromRawExtension(p.machine.Spec.ProviderSpec.Value)
-	// if err != nil {
-	// 	return fmt.Errorf("error decoding MachineProviderConfig: %w", err)
-	// }
-
-	// p.machine.Labels[machinecontroller.MachineRegionLabelName] = machineProviderConfig.Placement.Region
+	//memory
+	//storage
+	//cpu
+	////labels
+	//machineProviderConfig, err := kubevirtproviderv1.ProviderSpecFromRawExtension(p.machine.Spec.ProviderSpec.Value)
+	//
+	//if err != nil {
+	//	return fmt.Errorf("error decoding MachineProviderConfig: %w", err)
+	//}
+	//
+	//p.machine.Labels[machinecontroller.MachineRegionLabelName] = machineProviderConfig.Placement.Region
 
 	// if instance.Placement != nil {
 	// 	p.machine.Labels[machinecontroller.MachineAZLabelName] = aws.StringValue(instance.Placement.AvailabilityZone)

@@ -178,6 +178,7 @@ func conditionFailed() kubevirtapiv1.VirtualMachineCondition {
 
 // validateMachine check the label that a machine must have to identify the cluster to which it belongs is present.
 func validateMachine(machine machinev1.Machine) error {
+	// TODO: insert a validation on machine labels
 	if machine.Labels[machinev1.MachineClusterIDLabel] == "" {
 		return machinecontroller.InvalidMachineConfiguration("%v: missing %q label", machine.GetName(), machinev1.MachineClusterIDLabel)
 	}
