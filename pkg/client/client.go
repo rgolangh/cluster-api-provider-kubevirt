@@ -65,7 +65,9 @@ func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespa
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty secretName")
 	}
 
-	// TODO Verify if namespace is not empty
+	if namespace == "" {
+		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty namespace")
+	}
 
 	userDataSecret, getSecretErr := kubernetesClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, k8smetav1.GetOptions{})
 	if getSecretErr != nil {

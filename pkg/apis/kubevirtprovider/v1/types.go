@@ -23,8 +23,10 @@ import (
 // KubevirtMachineProviderSpec is the Schema for the KubevirtMachineProviderSpec API
 // +k8s:openapi-gen=true
 type KubevirtMachineProviderSpec struct {
-	PvcName string `json:"pvcName,omitempty"`
-	//metav1.ObjectMeta `json:"metadata,omitempty"`
+	SourcePvcName string `json:"sourcePvcName,omitempty"`
+	SecretName    string `json:"secretName,omitempty"`
+	// TODO : add the ignition
+	// ignition    string `json:"pvcName,omitempty"`
 }
 
 // KubevirtMachineProviderStatus is the type that will be embedded in a Machine.Status.ProviderStatus field.

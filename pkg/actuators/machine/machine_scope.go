@@ -54,8 +54,7 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	// TODO Nir - add secretName
-	kubevirtClient, err := params.kubevirtClientBuilder(params.kubernetesClient, "", params.machine.GetNamespace())
+	kubevirtClient, err := params.kubevirtClientBuilder(params.kubernetesClient, providerSpec.SecretName, params.machine.GetNamespace())
 
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
@@ -68,8 +67,9 @@ func newMachineScope(params machineScopeParams) (*machineScope, error) {
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			Running:     &runningState,
 			RunStrategy: &runAlways,
+			// TODO: change the name SourcePvcName -> SourcePvcName
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(params.machine.GetName(), providerSpec.PvcName, params.machine.GetNamespace()),
+				*buildBootVolumeDataVolumeTemplate(params.machine.GetName(), providerSpec.SourcePvcName, params.machine.GetNamespace()),
 			},
 		},
 		Status: providerStatus.VirtualMachineStatus,
