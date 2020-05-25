@@ -19,7 +19,6 @@ package client
 import (
 	"context"
 
-	networkclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,10 +92,6 @@ func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespa
 		kubecliclient: kubecliclient,
 		virtctlclient: "",
 	}, nil
-}
-
-func (c *kubevirtClient) NetworkClient() networkclient.Interface {
-	return c.NetworkClient()
 }
 
 func (c *kubevirtClient) CreateVirtualMachine(namespace string, newVM *v1.VirtualMachine) (*v1.VirtualMachine, error) {

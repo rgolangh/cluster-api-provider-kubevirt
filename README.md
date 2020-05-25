@@ -1,6 +1,6 @@
-# OpenShift cluster-api-provider-aws
+# OpenShift cluster-api-provider-kubevirt
 
-This repository hosts an implementation of a provider for AWS for the
+This repository hosts an implementation of a provider for KubeVirt for the
 OpenShift [machine-api](https://github.com/openshift/cluster-api).
 
 This provider runs as a machine-controller deployed by the
@@ -112,10 +112,10 @@ Note: this info is RH only, it needs to be backported every time the `README.md`
    controllers) running `machine-controller`. In order to run locally built one,
    simply edit `machine-api-controllers` deployment and remove `machine-controller` container from it.
 
-1. **Build and run aws actuator outside of the cluster**
+1. **Build and run KubeVirt actuator outside of the cluster**
 
    ```sh
-   $ go build -o bin/manager sigs.k8s.io/cluster-api-provider-aws/cmd/manager
+   $ go build -o bin/manager github.com/kubevirt/cluster-api-provider-kubevirt/cmd/manager
    ```
 
    ```sh
@@ -201,10 +201,3 @@ Note: this info is RH only, it needs to be backported every time the `README.md`
    ```sh
    $ kubectl --kubeconfig=kubeconfig get nodes
    ```
-
-# Upstream Implementation
-Other branches of this repository may choose to track the upstream
-Kubernetes [Cluster-API AWS provider](https://github.com/kubernetes-sigs/cluster-api-provider-aws/)
-
-In the future, we may align the master branch with the upstream project as it
-stabilizes within the community.

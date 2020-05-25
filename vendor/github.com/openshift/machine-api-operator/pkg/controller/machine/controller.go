@@ -18,7 +18,6 @@ package machine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -397,19 +396,19 @@ func (r *ReconcileMachine) deleteNode(ctx context.Context, name string) error {
 }
 
 func delayIfRequeueAfterError(err error) (reconcile.Result, error) {
-	var requeueAfterError *RequeueAfterError
-	if errors.As(err, &requeueAfterError) {
-		klog.Infof("Actuator returned requeue-after error: %v", requeueAfterError)
-		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterError.RequeueAfter}, nil
+	switch t := err.(type) {
+	case *RequeueAfterError:
+		klog.Infof("Actuator returned requeue-after error: %v", err)
+		return reconcile.Result{Requeue: true, RequeueAfter: t.RequeueAfter}, nil
 	}
 	return reconcile.Result{}, err
 }
 
 func isInvalidMachineConfigurationError(err error) bool {
-	var machineError *MachineError
-	if errors.As(err, &machineError) {
-		if machineError.Reason == machinev1.InvalidConfigurationMachineError {
-			klog.Infof("Actuator returned invalid configuration error: %v", machineError)
+	switch t := err.(type) {
+	case *MachineError:
+		if t.Reason == machinev1.InvalidConfigurationMachineError {
+			klog.Infof("Actuator returned invalid configuration error: %v", err)
 			return true
 		}
 	}
