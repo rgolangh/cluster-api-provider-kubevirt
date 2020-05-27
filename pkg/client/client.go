@@ -17,8 +17,6 @@ limitations under the License.
 package client
 
 import (
-	"context"
-
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,7 +67,7 @@ func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespa
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty namespace")
 	}
 
-	userDataSecret, getSecretErr := kubernetesClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, k8smetav1.GetOptions{})
+	userDataSecret, getSecretErr := kubernetesClient.CoreV1().Secrets(namespace).Get(secretName, k8smetav1.GetOptions{})
 	if getSecretErr != nil {
 		if apimachineryerrors.IsNotFound(getSecretErr) {
 			return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v not found", namespace, secretName, getSecretErr)
