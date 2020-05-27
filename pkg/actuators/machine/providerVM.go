@@ -124,7 +124,7 @@ func (p *providerVM) update() error {
 	updatedVm, updateVMErr := p.updateVM(p.virtualMachine)
 
 	if updateVMErr != nil {
-		return fmt.Errorf("failed to update VM : %w", existingVMErr)
+		return fmt.Errorf("failed to update VM: %w", updateVMErr)
 	}
 	if setIDErr := p.setProviderID(updatedVm); setIDErr != nil {
 		return fmt.Errorf("failed to update machine object with providerID: %w", setIDErr)
@@ -142,11 +142,16 @@ func (p *providerVM) update() error {
 
 // exists returns true if machine exists.
 func (p *providerVM) exists() (bool, error) {
-	existingVM, err := p.getVM(p.virtualMachine.GetName())
-	if err != nil || existingVM == nil || existingVM.Name != p.virtualMachine.GetName() || existingVM.Namespace != p.virtualMachine.GetNamespace() {
-		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), err)
+	existingVM, existingVMErr := p.getVM(p.virtualMachine.GetName())
+	if existingVMErr != nil {
+		klog.Errorf("%s: error getting existing VM: %v", p.machine.GetName(), existingVMErr)
+		return false, existingVMErr
 	}
-	return true, err
+	if existingVM == nil {
+		klog.Infof("%s: VM does not exist", p.machine.GetName())
+		return false, nil
+	}
+	return true, existingVMErr
 }
 
 func (p *providerVM) createVM(virtualMachine *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error) {

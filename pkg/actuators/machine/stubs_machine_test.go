@@ -46,7 +46,7 @@ func stubMachine(labels map[string]string, providerID string) (*machinev1.Machin
 			ProviderSpec: machinev1.ProviderSpec{Value: providerSpecValue},
 			ProviderID:   &providerID,
 		},
-		Status: nil,
+		Status: machinev1.MachineStatus{},
 	}
 
 	return machine, nil
