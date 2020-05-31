@@ -1,0 +1,11 @@
+bin/
+.idea
+.idea/cluster-api-provider-ovirt.iml
+.idea/encodings.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/workspace.xml
+.idea/
+minikube
+docker-machine-driver-kvm2

@@ -1,4 +1,4 @@
-package machine
+package vm
 
 import (
 	"errors"
@@ -14,10 +14,10 @@ import (
 	kubevirtClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 	mockkubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client/mock"
 	"gotest.tools/assert"
-	v1 "kubevirt.io/client-go/api/v1"
+	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )
 
-func initializeTest(t *testing.T, mockKubevirtClient *mockkubevirtclient.MockClient, labels map[string]string, providerID string) *machineScope {
+func initializeMachine(t *testing.T, mockKubevirtClient *mockkubevirtclient.MockClient, labels map[string]string, providerID string) *machinev1.Machine {
 	machine, stubMachineErr := stubMachine(labels, providerID)
 
 	if stubMachineErr != nil {
@@ -25,23 +25,9 @@ func initializeTest(t *testing.T, mockKubevirtClient *mockkubevirtclient.MockCli
 		return nil
 	}
 
-	machineScope, newMachineScopeErr := newMachineScope(machineScopeParams{
-		kubevirtClientBuilder: func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
-			return mockKubevirtClient, nil
-		},
-		machine:          machine,
-		kubernetesClient: nil,
-		Context:          nil,
-	})
-
-	if newMachineScopeErr != nil {
-		t.Fatal(newMachineScopeErr)
-		return nil
-	}
-
-	return machineScope
-
+	return machine
 }
+
 func TestCreate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
 	cases := []struct {
@@ -95,15 +81,29 @@ func TestCreate(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
 			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
-			if machineScope == nil {
-				return
+			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machine == nil {
+				t.Fatalf("Unable to create the stub machine object")
 			}
-			machineScope.virtualMachine.Status.Ready = tc.wantVMToBeReady
-			mockKubevirtClient.EXPECT().CreateVirtualMachine(defaultNamespace, machineScope.virtualMachine).Return(machineScope.virtualMachine, tc.ClientCreateError).AnyTimes()
 
-			providerVMInstance := providerVM{machineScope}
-			createVMErr := providerVMInstance.create()
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			if virtualMachineErr != nil {
+				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
+			}
+
+			returnVM, returnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			if returnVMErr != nil {
+				t.Fatalf("Unable to build virtual machine with error: %v", returnVMErr)
+			}
+			returnVM.Status.Ready = tc.wantVMToBeReady
+
+			mockKubevirtClient.EXPECT().CreateVirtualMachine(defaultNamespace, virtualMachine).Return(returnVM, tc.ClientCreateError).AnyTimes()
+
+			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
+				return mockKubevirtClient, nil
+			}
+			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			createVMErr := providerVMInstance.Create(machine)
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, createVMErr.Error())
 			} else if tc.wantCreateErr != "" {
@@ -193,20 +193,28 @@ func TestDelete(t *testing.T) {
 			defer mockCtrl.Finish()
 			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
 
-			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
-			if machineScope == nil {
-				return
+			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machine == nil {
+				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			returnVm := machineScope.virtualMachine
-			if tc.emptyGetVM {
-				returnVm = nil
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			if virtualMachineErr != nil {
+				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
-			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name).Return(returnVm, tc.clientGetError).AnyTimes()
-			mockKubevirtClient.EXPECT().DeleteVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteError).AnyTimes()
 
-			providerVMInstance := providerVM{machineScope}
-			deleteVMErr := providerVMInstance.delete()
+			var returnVM *kubevirtapiv1.VirtualMachine
+			if !tc.emptyGetVM {
+				returnVM = virtualMachine
+			}
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name).Return(returnVM, tc.clientGetError).AnyTimes()
+			mockKubevirtClient.EXPECT().DeleteVirtualMachine(defaultNamespace, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteError).AnyTimes()
+
+			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
+				return mockKubevirtClient, nil
+			}
+			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			deleteVMErr := providerVMInstance.Delete(machine)
 
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, deleteVMErr.Error())
@@ -262,18 +270,29 @@ func TestExists(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
 			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
-			if machineScope == nil {
-				return
+
+			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machine == nil {
+				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			returnVm := machineScope.virtualMachine
-			if tc.emptyGetVM {
-				returnVm = nil
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			if virtualMachineErr != nil {
+				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
-			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name).Return(returnVm, tc.clientGetError).AnyTimes()
-			providerVMInstance := providerVM{machineScope}
-			existsVM, existsVMErr := providerVMInstance.exists()
+
+			var returnVM *kubevirtapiv1.VirtualMachine
+			if !tc.emptyGetVM {
+				returnVM = virtualMachine
+			}
+
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name).Return(returnVM, tc.clientGetError).AnyTimes()
+
+			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
+				return mockKubevirtClient, nil
+			}
+			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			existsVM, existsVMErr := providerVMInstance.Exists(machine)
 
 			if tc.clientGetError != nil {
 				assert.Equal(t, tc.clientGetError.Error(), existsVMErr.Error())
@@ -373,23 +392,43 @@ func TestUpdate(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
 			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			machineScope := initializeTest(t, mockKubevirtClient, tc.labels, tc.providerID)
-			if machineScope == nil {
-				return
+
+			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			if machine == nil {
+				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			returnVm := machineScope.virtualMachine
-			if tc.emptyGetVM {
-				returnVm = nil
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			if virtualMachineErr != nil {
+				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
-			machineScope.virtualMachine.Status.Ready = tc.wantVMToBeReady
-			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, machineScope.virtualMachine.Name).Return(returnVm, tc.clientGetError).AnyTimes()
-			mockKubevirtClient.EXPECT().UpdateVirtualMachine(defaultNamespace, machineScope.virtualMachine).Return(machineScope.virtualMachine, tc.clientUpdateError).AnyTimes()
+
+			var getReturnVM *kubevirtapiv1.VirtualMachine
+			if !tc.emptyGetVM {
+				returnVMResult, returnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+				if returnVMErr != nil {
+					t.Fatalf("Unable to build virtual machine with error: %v", returnVMErr)
+				}
+				getReturnVM = returnVMResult
+			}
+
+			updateReturnVM, updateReturnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			if updateReturnVMErr != nil {
+				t.Fatalf("Unable to build virtual machine with error: %v", updateReturnVMErr)
+			}
+
+			updateReturnVM.Status.Ready = tc.wantVMToBeReady
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name).Return(getReturnVM, tc.clientGetError).AnyTimes()
+			mockKubevirtClient.EXPECT().UpdateVirtualMachine(defaultNamespace, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
 			// TODO: added cases when existingVM == nil :
 			// p.machine.Spec.ProviderID != nil && *p.machine.Spec.ProviderID != "" && (p.machine.Status.LastUpdated == nil || p.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) - return error
 			// else - another error
-			providerVMInstance := providerVM{machineScope}
-			updateVMErr := providerVMInstance.update()
+			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
+				return mockKubevirtClient, nil
+			}
+			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+
+			updateVMErr := providerVMInstance.Update(machine)
 
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, updateVMErr.Error())
@@ -404,25 +443,25 @@ func TestUpdate(t *testing.T) {
 			} else {
 				assert.Equal(t, updateVMErr, nil)
 				//providerID := fmt.Sprintf("kubevirt:///%s/%s", machineScope.machine.GetNamespace(), machineScope.virtualMachine.GetName())
-				assert.Equal(t, *machineScope.machine.Spec.ProviderID, tc.providerID)
+				assert.Equal(t, *machine.Spec.ProviderID, tc.providerID)
 			}
 		})
 	}
 
 }
 
-func DefaultVirtualMachine(started bool) (*v1.VirtualMachine, *v1.VirtualMachineInstance) {
+func DefaultVirtualMachine(started bool) (*kubevirtapiv1.VirtualMachine, *kubevirtapiv1.VirtualMachineInstance) {
 	return DefaultVirtualMachineWithNames(started, "testvmi", "testvmi")
 }
 
-func DefaultVirtualMachineWithNames(started bool, vmName string, vmiName string) (*v1.VirtualMachine, *v1.VirtualMachineInstance) {
-	vmi := v1.NewMinimalVMI(vmiName)
-	vmi.Status.Phase = v1.Running
+func DefaultVirtualMachineWithNames(started bool, vmName string, vmiName string) (*kubevirtapiv1.VirtualMachine, *kubevirtapiv1.VirtualMachineInstance) {
+	vmi := kubevirtapiv1.NewMinimalVMI(vmiName)
+	vmi.Status.Phase = kubevirtapiv1.Running
 	vm := VirtualMachineFromVMI(vmName, vmi, started)
 	t := true
 	vmi.OwnerReferences = []metav1.OwnerReference{{
-		APIVersion:         v1.VirtualMachineGroupVersionKind.GroupVersion().String(),
-		Kind:               v1.VirtualMachineGroupVersionKind.Kind,
+		APIVersion:         kubevirtapiv1.VirtualMachineGroupVersionKind.GroupVersion().String(),
+		Kind:               kubevirtapiv1.VirtualMachineGroupVersionKind.Kind,
 		Name:               vm.ObjectMeta.Name,
 		UID:                vm.ObjectMeta.UID,
 		Controller:         &t,
@@ -431,12 +470,12 @@ func DefaultVirtualMachineWithNames(started bool, vmName string, vmiName string)
 	return vm, vmi
 }
 
-func VirtualMachineFromVMI(name string, vmi *v1.VirtualMachineInstance, started bool) *v1.VirtualMachine {
-	vm := &v1.VirtualMachine{
+func VirtualMachineFromVMI(name string, vmi *kubevirtapiv1.VirtualMachineInstance, started bool) *kubevirtapiv1.VirtualMachine {
+	vm := &kubevirtapiv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: vmi.ObjectMeta.Namespace, ResourceVersion: "1"},
-		Spec: v1.VirtualMachineSpec{
+		Spec: kubevirtapiv1.VirtualMachineSpec{
 			Running: &started,
-			Template: &v1.VirtualMachineInstanceTemplateSpec{
+			Template: &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   vmi.ObjectMeta.Name,
 					Labels: vmi.ObjectMeta.Labels,

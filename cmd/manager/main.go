@@ -17,8 +17,9 @@ import (
 	"flag"
 	"os"
 
-	machineactuator "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuators/machine"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuator"
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/managers/vm"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
 	kubernetesclient "k8s.io/client-go/kubernetes"
@@ -77,12 +78,9 @@ func main() {
 		klog.Fatalf("Error setting up scheme: %v", err)
 	}
 
+	providerVM := vm.New(kubevirtclient.NewClient, kubernetesClient)
 	// Initialize machine actuator.
-	machineActuator := machineactuator.NewActuator(machineactuator.ActuatorParams{
-		KubernetesClient:      kubernetesClient,
-		EventRecorder:         mgr.GetEventRecorderFor("awscontroller"),
-		KubevirtClientBuilder: kubevirtclient.NewClient,
-	})
+	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("awscontroller"))
 
 	// TODO this is call to machine-api-operator/pkg/controller/machine
 	// In ovirt the call is to cluster-api/pkg/controller/machine
