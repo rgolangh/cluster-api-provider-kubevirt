@@ -2,11 +2,11 @@
 apiVersion: machine.openshift.io/v1beta1
 kind: Machine
 metadata:
-  name: aws-actuator-testing-machine
+  name: kubevirt-actuator-testing-machine
   namespace: test
-  generateName: vs-master-
+  generateName: vm-master-
   labels:
-    machine.openshift.io/cluster-api-cluster: aws-actuator-k8s
+    machine.openshift.io/cluster-api-cluster: kubevirt
 spec:
   metadata:
     labels:
@@ -14,46 +14,13 @@ spec:
       node-role.kubernetes.io/infra: ""
   providerSpec:
     value:
-      apiVersion: awsproviderconfig.openshift.io/v1beta1
-      kind: AWSMachineProviderConfig
-      ami:
-        filters:
-        - name: "tag:image_stage"
-          values:
-          - "base"
-        - name: "tag:operating_system"
-          values:
-          - "rhel"
-        - name: "tag:ready"
-          values:
-          - "yes"
-      instanceType: m4.xlarge
-      placement:
-        region: us-east-1
-        availabilityZone: us-east-1a
-      subnet:
-        filters:
-          - name: "tag:Name"
-            values:
-            - "aws-actuator-k8s-worker-*"
-      iamInstanceProfile:
-        id: openshift_master_launch_instances
-      keyName: libra
-      tags:
-      - name: openshift-node-group-config
-        value: node-config-master
-      - name: host-type
-        value: master
-      - name: sub-host-type
-        value: default
-      securityGroups:
-        - filters:
-            - name: "tag:Name"
-              values:
-              - "aws-actuator-k8s-*"
-      publicIp: true
-      userDataSecret:
-        name: aws-actuator-user-data-secret
+      # TODO: understqan the version : apiVersion: kubevirtproviderconfig.openshift.io/v1beta1
+      kind: KubevirtMachineProviderSpec
+      SecretName:
+        name: underkube-kubeconfig
+      SourcePvcName:
+        name: my-image
+
   versions:
     kubelet: 1.10.1
     controlPlane: 1.10.1

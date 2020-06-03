@@ -31,7 +31,11 @@ import (
 )
 
 func main() {
-	klog.InitFlags(nil)
+	var printVersion bool
+	flag.BoolVar(&printVersion, "version", false, "print version and exit")
+
+	// TODO Add relevant flags as written in klog initFlags
+	//klog.InitFlags(nil)
 
 	watchNamespace := flag.String("namespace", "", "Namespace that the controller watches to reconcile machine-api objects. If unspecified, the controller watches for machine-api objects across all namespaces.")
 	// TODO Remove this flag when stable
