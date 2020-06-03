@@ -26,6 +26,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/managers/vm"
+	"github.com/openshift/cluster-api/pkg/client/clientset_generated/clientset/typed/machine/v1beta1"
 )
 
 const (
@@ -39,15 +40,17 @@ const (
 
 // Actuator is responsible for performing machine reconciliation.
 type Actuator struct {
-	eventRecorder record.EventRecorder
-	providerVM    vm.ProviderVM
+	eventRecorder  record.EventRecorder
+	providerVM     vm.ProviderVM
+	machinesClient v1beta1.MachineV1beta1Interface
 }
 
 // New returns an actuator.
-func New(providerVM vm.ProviderVM, eventRecorder record.EventRecorder) *Actuator {
+func New(providerVM vm.ProviderVM, eventRecorder record.EventRecorder, machinesClient v1beta1.MachineV1beta1Interface) *Actuator {
 	return &Actuator{
-		providerVM:    providerVM,
-		eventRecorder: eventRecorder,
+		providerVM:     providerVM,
+		eventRecorder:  eventRecorder,
+		machinesClient: machinesClient,
 	}
 }
 

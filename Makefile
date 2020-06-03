@@ -25,11 +25,17 @@ ifeq ($(DBG),1)
 GOGCFLAGS ?= -gcflags=all="-N -l"
 endif
 
-VERSION     ?= $(shell git describe --always --abbrev=7)
+REGISTRY ?= quay.io/nargaman
+VERSION?=$(shell git describe --tags --always --match "v[0-9]*" | awk -F'-' '{print substr($$1,2) }')
+RELEASE?=$(shell git describe --tags --always --match "v[0-9]*" | awk -F'-' '{if ($$2 != "") {print $$2 "." $$3} else {print 1}}')
+VERSION_RELEASE=$(VERSION)$(if $(RELEASE),-$(RELEASE))
+
 REPO_PATH   ?= github.com/kubevirt/cluster-api-provider-kubevirt
 LD_FLAGS    ?= -X $(REPO_PATH)/pkg/version.Raw=$(VERSION) -extldflags "-static"
 MUTABLE_TAG ?= latest
 IMAGE        = origin-kubevirt-machine-controllers
+CLUSTER_API ?= github.com/openshift/cluster-api
+
 
 .PHONY: all
 all: generate build images check
@@ -65,17 +71,16 @@ bin:
 
 .PHONY: build
 build: ## build binaries
-	$(DOCKER_CMD) go build $(GOGCFLAGS) -o "bin/machine-controller-manager" \
-               -ldflags "$(LD_FLAGS)" "$(REPO_PATH)/cmd/manager"
+	$(DOCKER_CMD) go build $(GOGCFLAGS) -o "bin/manager" -ldflags "$(LD_FLAGS)" "$(REPO_PATH)/vendor/$(CLUSTER_API)/cmd/manager"
+	$(DOCKER_CMD) go build $(GOGCFLAGS) -o "bin/machine-controller-manager" -ldflags "$(LD_FLAGS)" "$(REPO_PATH)/cmd/manager"
 
 .PHONY: images
 images: ## Create images
-	$(IMAGE_BUILD_CMD) -t "$(IMAGE):$(VERSION)" -t "$(IMAGE):$(MUTABLE_TAG)" ./
+	$(IMAGE_BUILD_CMD) -t "$(REGISTRY)/$(IMAGE):$(VERSION)" --build-arg version=$(VERSION) --build-arg release=$(RELEASE) ./
 
 .PHONY: push
 push:
-	docker push "$(IMAGE):$(VERSION)"
-	docker push "$(IMAGE):$(MUTABLE_TAG)"
+	docker push "$(REGISTRY)/$(IMAGE):$(VERSION)"
 
 .PHONY: check
 check: fmt vet lint test check-pkg ## Check your code
