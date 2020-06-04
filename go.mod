@@ -7,7 +7,6 @@ require (
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/mock v1.2.0
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/openshift/cluster-api v0.0.0-20191030113141-9a3a7bbe9258
 	github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.3
@@ -20,7 +19,6 @@ require (
 	kubevirt.io/client-go v0.29.0
 	kubevirt.io/containerized-data-importer v1.10.9
 	sigs.k8s.io/controller-runtime v0.6.0
-	sigs.k8s.io/controller-tools v0.2.4
 	sigs.k8s.io/yaml v1.2.0
 )
 
@@ -40,7 +38,7 @@ replace (
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.16.4
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.16.4
 	k8s.io/code-generator => k8s.io/code-generator v0.16.4
-	k8s.io/component-base => k8s.io/component-base v0.0.0-20190612130303-4062e14deebe
+	k8s.io/component-base => k8s.io/component-base v0.16.4
 	k8s.io/cri-api => k8s.io/cri-api v0.16.4
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.16.4
 	k8s.io/klog => k8s.io/klog v0.4.0
