@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
@@ -91,5 +92,12 @@ func main() {
 	// What is the difference? which one is better?
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {
 		klog.Fatalf("Error adding actuator: %v", err)
+	}
+
+	entryLog.Info("@@@@@@@@@@@@@@@@ Before my changes")
+	// Start the Cmd
+	err = mgr.Start(ctrl.SetupSignalHandler())
+	if err != nil {
+		klog.Fatalf("Error starting manager: %v", err)
 	}
 }
