@@ -8,6 +8,7 @@ require (
 	github.com/golang/mock v1.2.0
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3
+	golang.org/x/crypto v0.0.0-20191205180655-e7c4368fe9dd // indirect
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.3
 	k8s.io/apiextensions-apiserver v0.18.0-rc.1 // indirect

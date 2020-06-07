@@ -64,6 +64,7 @@ func (a *Actuator) handleMachineError(machine *machinev1.Machine, err error, eve
 // Create creates a machine and is invoked by the machine controller.
 func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator creating machine", vm.GetMachineName(machine))
+
 	if err := a.providerVM.Create(machine); err != nil {
 		fmtErr := fmt.Errorf(vmsFailFmt, vm.GetMachineName(machine), createEventAction, err)
 		return a.handleMachineError(machine, fmtErr, createEventAction)
@@ -76,6 +77,7 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 // A machine which is not terminated is considered as existing.
 func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool, error) {
 	klog.Infof("%s: actuator checking if machine exists", vm.GetMachineName(machine))
+
 	return a.providerVM.Exists(machine)
 }
 
@@ -102,6 +104,7 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 // Delete deletes a machine and updates its finalizer
 func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator deleting machine", vm.GetMachineName(machine))
+
 	if err := a.providerVM.Delete(machine); err != nil {
 		fmtErr := fmt.Errorf(vmsFailFmt, vm.GetMachineName(machine), deleteEventAction, err)
 		return a.handleMachineError(machine, fmtErr, deleteEventAction)

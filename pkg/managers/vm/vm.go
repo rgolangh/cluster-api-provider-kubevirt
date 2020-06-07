@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
@@ -101,6 +102,11 @@ func (m *manager) Delete(machine *machinev1.Machine) (err error) {
 
 	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
 	if existingVMErr != nil {
+		// TODO ask Nir how to check it  github.com/jinzhu/gorm  + gorm.IsRecordNotFoundError(existingVMErr)
+		if strings.Contains(existingVMErr.Error(), "not found") {
+			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
+			return nil
+		}
 		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), existingVMErr)
 		return existingVMErr
 	}
@@ -156,6 +162,7 @@ func (m *manager) Update(machine *machinev1.Machine) (err error) {
 		return &machinecontroller.RequeueAfterError{RequeueAfter: requeueAfterFatalSeconds * time.Second}
 	}
 
+	machineScope.virtualMachine.ObjectMeta.ResourceVersion = existingVM.ObjectMeta.ResourceVersion
 	updatedVM, updateVMErr := m.updateVM(machineScope.virtualMachine, machineScope)
 
 	if updateVMErr != nil {
@@ -170,7 +177,12 @@ func (m *manager) Update(machine *machinev1.Machine) (err error) {
 	klog.Infof("Updated machine %s", machineScope.getMachineName())
 	machineScope.setProviderStatus(updatedVM, conditionSuccess())
 
-	return m.requeueIfInstancePending(updatedVM, machineScope.getMachineName())
+	getUpdatedVM, getUpdatedVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
+	if getUpdatedVMErr != nil {
+		klog.Errorf("%s: error getting updated VM: %v", machineScope.getMachineName(), existingVMErr)
+		getUpdatedVM = updatedVM
+	}
+	return m.requeueIfInstancePending(getUpdatedVM, machineScope.getMachineName())
 }
 
 // exists returns true if machine exists.
@@ -182,6 +194,11 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 
 	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
 	if existingVMErr != nil {
+		// TODO ask Nir how to check it  github.com/jinzhu/gorm  + gorm.IsRecordNotFoundError(existingVMErr)
+		if strings.Contains(existingVMErr.Error(), "not found") {
+			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
+			return false, nil
+		}
 		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), existingVMErr)
 		return false, existingVMErr
 	}
@@ -208,7 +225,7 @@ func (m *manager) createVM(virtualMachine *kubevirtapiv1.VirtualMachine, machine
 }
 
 func (m *manager) getVM(vmName string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.GetVirtualMachine(machineScope.getMachineNamespace(), vmName)
+	return machineScope.kubevirtClient.GetVirtualMachine(machineScope.getMachineNamespace(), vmName, &k8smetav1.GetOptions{})
 }
 
 func (m *manager) deleteVM(vmName string, machineScope *machineScope) error {

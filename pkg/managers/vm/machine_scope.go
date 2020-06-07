@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
-
 	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
+	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetesclient "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
@@ -18,7 +18,11 @@ import (
 )
 
 const (
-	userDataSecretKey = "userData"
+	userDataSecretKey                 = "userData"
+	pvcRequestsStorage                = "35Gi"
+	defaultRequestedMemory            = "2048M"
+	defaultPersistentVolumeAccessMode = corev1.ReadWriteOnce
+	defaultDataVolumeDiskName         = "datavolumedisk1"
 )
 
 type machineScope struct {
@@ -60,7 +64,7 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetescli
 }
 
 func machineToVirtualMachine(machine *machinev1.Machine, sourcePvcName string) (*kubevirtapiv1.VirtualMachine, error) {
-	runningState := true
+	//runningState := true
 	runAlways := kubevirtapiv1.RunStrategyAlways
 
 	providerStatus, err := kubevirtproviderv1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
@@ -68,21 +72,28 @@ func machineToVirtualMachine(machine *machinev1.Machine, sourcePvcName string) (
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	// TODO understand if the 'Template' is needed here
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
-			Running:     &runningState,
+			//Running: &runningState,
 			RunStrategy: &runAlways,
-			// TODO: change the name SourcePvcName -> SourcePvcName
 			DataVolumeTemplates: []cdiv1.DataVolume{
 				*buildBootVolumeDataVolumeTemplate(machine.GetName(), sourcePvcName, machine.GetNamespace()),
 			},
+			Template: buildVMITemplate(machine.GetName()),
 		},
 		Status: providerStatus.VirtualMachineStatus,
 	}
 
 	virtualMachine.TypeMeta = machine.TypeMeta
-	virtualMachine.ObjectMeta = machine.ObjectMeta
+	virtualMachine.ObjectMeta = metav1.ObjectMeta{
+		Name: machine.Name,
+		//GenerateName:               "",
+		Namespace:       machine.Namespace,
+		Labels:          machine.Labels,
+		Annotations:     machine.Annotations,
+		OwnerReferences: machine.OwnerReferences,
+		ClusterName:     machine.ClusterName,
+	}
 
 	return &virtualMachine, nil
 }
@@ -170,14 +181,63 @@ func (s *machineScope) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.Virtua
 	return nil
 }
 
+func buildVMITemplate(virtualMachineName string) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
+	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
+
+	template.ObjectMeta = metav1.ObjectMeta{
+		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName},
+	}
+
+	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
+	template.Spec.Volumes = []kubevirtapiv1.Volume{
+		{
+			// TODO : use the machine-name in order to determine the volume
+			Name: defaultDataVolumeDiskName,
+			VolumeSource: kubevirtapiv1.VolumeSource{
+				DataVolume: &kubevirtapiv1.DataVolumeSource{
+					Name: buildBootVolumeName(virtualMachineName),
+				},
+			},
+		},
+	}
+
+	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
+
+	requests := corev1.ResourceList{}
+	//Memory:
+	requests[corev1.ResourceMemory] = apiresource.MustParse(defaultRequestedMemory)
+
+	//CPU:
+	//requests[corev1.ResourceCPU] = apiresource.MustParse("2")
+
+	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
+		Requests: requests,
+	}
+	// TODO: get the machine type from machine.yaml
+	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: ""}
+	template.Spec.Domain.Devices = kubevirtapiv1.Devices{
+		Disks: []kubevirtapiv1.Disk{
+			{
+				Name: defaultDataVolumeDiskName,
+			},
+		},
+	}
+
+	return template
+}
+
+func buildBootVolumeName(virtualMachineName string) string {
+	return virtualMachineName + "-bootvolume"
+}
 func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string, namespace string) *cdiv1.DataVolume {
 	// TODO Nir - add spec to data volume
 	return &cdiv1.DataVolume{
 		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      virtualMachineName + "BootVolume",
+			Name:      buildBootVolumeName(virtualMachineName),
 			Namespace: namespace,
 		},
+		// TODO: ERROR: [spec.pvc.resources.requests: Required value, spec.pvc.accessModes: Required value
 		Spec: cdiv1.DataVolumeSpec{
 			Source: cdiv1.DataVolumeSource{
 				PVC: &cdiv1.DataVolumeSourcePVC{
@@ -185,7 +245,18 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string
 					Namespace: namespace,
 				},
 			},
-			PVC: &corev1.PersistentVolumeClaimSpec{},
+			PVC: &corev1.PersistentVolumeClaimSpec{
+				// TODO: Need to determin it by the type of storage class
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					defaultPersistentVolumeAccessMode,
+				},
+				// TODO: Where to get it?? - add as a list
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: apiresource.MustParse(pvcRequestsStorage),
+					},
+				},
+			},
 		},
 	}
 }

@@ -22,15 +22,16 @@ import (
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kubernetesclient "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	v1 "kubevirt.io/client-go/api/v1"
 	"kubevirt.io/client-go/kubecli"
 )
 
-//go:generate go run ../../vendor/github.com/golang/mock/mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
+//go:generate  mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 
 const (
 	// UnderKubeConfig is secret key containing kubeconfig content of the UnderKube
-	UnderKubeConfig = "underkube_kubeconfig"
+	UnderKubeConfig = "kubeconfig"
 )
 
 // KubevirtClientBuilderFuncType is function type for building aws client
@@ -40,7 +41,7 @@ type KubevirtClientBuilderFuncType func(kubernetesClient *kubernetesclient.Clien
 type Client interface {
 	CreateVirtualMachine(namespace string, newVM *v1.VirtualMachine) (*v1.VirtualMachine, error)
 	DeleteVirtualMachine(namespace string, name string, options *k8smetav1.DeleteOptions) error
-	GetVirtualMachine(namespace string, name string) (*v1.VirtualMachine, error)
+	GetVirtualMachine(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachine, error)
 	ListVirtualMachine(namespace string, options *k8smetav1.ListOptions) (*v1.VirtualMachineList, error)
 	UpdateVirtualMachine(namespace string, vm *v1.VirtualMachine) (*v1.VirtualMachine, error)
 	PatchVirtualMachine(namespace string, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.VirtualMachine, err error)
@@ -57,8 +58,6 @@ type kubevirtClient struct {
 
 // NewClient creates our client wrapper object for the actual KubeVirt and VirtCtl clients we use.
 func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (Client, error) {
-	var kubeConfig string
-
 	if secretName == "" {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty secretName")
 	}
@@ -79,11 +78,11 @@ func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespa
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret %v did not contain key %v",
 			secretName, UnderKubeConfig)
 	}
-	kubeConfig = string(underKubeConfig)
-
-	// master is an optional argument, provide empty string
-	emptyMaster := ""
-	kubecliclient, getClientErr := kubecli.GetKubevirtClientFromFlags(emptyMaster, kubeConfig)
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(underKubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	kubecliclient, getClientErr := kubecli.GetKubevirtClientFromClientConfig(clientConfig)
 	if getClientErr != nil {
 		return nil, getClientErr
 	}
@@ -102,9 +101,8 @@ func (c *kubevirtClient) DeleteVirtualMachine(namespace string, name string, opt
 	return c.kubecliclient.VirtualMachine(namespace).Delete(name, options)
 }
 
-func (c *kubevirtClient) GetVirtualMachine(namespace string, name string) (*v1.VirtualMachine, error) {
-	// options *k8smetav1.GetOptions would be nil
-	return c.kubecliclient.VirtualMachine(namespace).Get(name, nil)
+func (c *kubevirtClient) GetVirtualMachine(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachine, error) {
+	return c.kubecliclient.VirtualMachine(namespace).Get(name, options)
 }
 
 func (c *kubevirtClient) ListVirtualMachine(namespace string, options *k8smetav1.ListOptions) (*v1.VirtualMachineList, error) {

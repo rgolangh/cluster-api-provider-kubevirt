@@ -5,12 +5,11 @@
 package mock
 
 import (
-	reflect "reflect"
-
 	gomock "github.com/golang/mock/gomock"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	v10 "kubevirt.io/client-go/api/v1"
+	reflect "reflect"
 )
 
 // MockClient is a mock of Client interface
@@ -66,18 +65,18 @@ func (mr *MockClientMockRecorder) DeleteVirtualMachine(namespace, name, options 
 }
 
 // GetVirtualMachine mocks base method
-func (m *MockClient) GetVirtualMachine(namespace, name string) (*v10.VirtualMachine, error) {
+func (m *MockClient) GetVirtualMachine(namespace, name string, options *v1.GetOptions) (*v10.VirtualMachine, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVirtualMachine", namespace, name)
+	ret := m.ctrl.Call(m, "GetVirtualMachine", namespace, name, options)
 	ret0, _ := ret[0].(*v10.VirtualMachine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVirtualMachine indicates an expected call of GetVirtualMachine
-func (mr *MockClientMockRecorder) GetVirtualMachine(namespace, name interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) GetVirtualMachine(namespace, name, options interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachine", reflect.TypeOf((*MockClient)(nil).GetVirtualMachine), namespace, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachine", reflect.TypeOf((*MockClient)(nil).GetVirtualMachine), namespace, name, options)
 }
 
 // ListVirtualMachine mocks base method

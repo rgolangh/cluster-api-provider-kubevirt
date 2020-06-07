@@ -2,9 +2,8 @@
 apiVersion: machine.openshift.io/v1beta1
 kind: Machine
 metadata:
-  name: kubevirt-actuator-testing-machine2
+  name: kubevirt-actuator-testing-machine8
   namespace: openshift-machine-api
-  generateName: vm-master-
   labels:
     machine.openshift.io/cluster-api-cluster: kubevirt
 spec:
@@ -14,14 +13,7 @@ spec:
       node-role.kubernetes.io/infra: ""
   providerSpec:
     value:
-      # $ oc scale --replicas 0 -n openshift-cluster-version deployments/cluster-version-operator
-      # TODO: understqan the version : apiVersion: kubevirtproviderconfig.openshift.io/v1beta1
+      # TODO: determine the version : apiVersion: kubevirtproviderconfig.openshift.io/v1beta1
       kind: KubevirtMachineProviderSpec
-      SecretName:
-        name: underkube-kubeconfig
-      SourcePvcName:
-        name: my-image
-
-  versions:
-    kubelet: 1.10.1
-    controlPlane: 1.10.1
+      SecretName: underkube-config
+      SourcePvcName: pvc-rhcos-image

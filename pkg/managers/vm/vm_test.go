@@ -207,7 +207,7 @@ func TestDelete(t *testing.T) {
 			if !tc.emptyGetVM {
 				returnVM = virtualMachine
 			}
-			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name).Return(returnVM, tc.clientGetError).AnyTimes()
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
 			mockKubevirtClient.EXPECT().DeleteVirtualMachine(defaultNamespace, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteError).AnyTimes()
 
 			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
@@ -286,7 +286,7 @@ func TestExists(t *testing.T) {
 				returnVM = virtualMachine
 			}
 
-			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name).Return(returnVM, tc.clientGetError).AnyTimes()
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
 
 			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
 				return mockKubevirtClient, nil
@@ -385,6 +385,7 @@ func TestUpdate(t *testing.T) {
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             "",
+			wantVMToBeReady:        false,
 		},
 	}
 	for _, tc := range cases {
@@ -410,6 +411,8 @@ func TestUpdate(t *testing.T) {
 					t.Fatalf("Unable to build virtual machine with error: %v", returnVMErr)
 				}
 				getReturnVM = returnVMResult
+				getReturnVM.Status.Ready = tc.wantVMToBeReady
+
 			}
 
 			updateReturnVM, updateReturnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
@@ -417,8 +420,7 @@ func TestUpdate(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", updateReturnVMErr)
 			}
 
-			updateReturnVM.Status.Ready = tc.wantVMToBeReady
-			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name).Return(getReturnVM, tc.clientGetError).AnyTimes()
+			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetError).AnyTimes()
 			mockKubevirtClient.EXPECT().UpdateVirtualMachine(defaultNamespace, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
 			// TODO: added cases when existingVM == nil :
 			// p.machine.Spec.ProviderID != nil && *p.machine.Spec.ProviderID != "" && (p.machine.Status.LastUpdated == nil || p.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) - return error
