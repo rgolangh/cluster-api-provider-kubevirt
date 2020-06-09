@@ -46,12 +46,12 @@ TODO
    controllers) running `machine-controller`.\
    In order to run locally built one, simply edit `machine-api-controllers` deployment and remove `machine-controller` container from it.
 
-1. **Deploy secret with AWS credentials**
+1. **Deploy secret with the undercloud kubeconfig**
 
    KubeVirt actuator assumes existence of a secret created from kubeconfig file.\
    If needed, generate the secret using the following command:
    ```sh
-   oc -n openshift-machine-api create secret generic underkube-config --from-file=$KUBECONFIG
+   oc -n openshift-machine-api create secret generic underkube-config --from-file=kubeconfig=$KUBECONFIG
    ```
 
 1. **Create PVC template**
