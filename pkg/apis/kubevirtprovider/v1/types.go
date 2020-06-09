@@ -23,8 +23,14 @@ import (
 // KubevirtMachineProviderSpec is the Schema for the KubevirtMachineProviderSpec API
 // +k8s:openapi-gen=true
 type KubevirtMachineProviderSpec struct {
-	SourcePvcName string `json:"sourcePvcName,omitempty"`
-	SecretName    string `json:"secretName,omitempty"`
+	SourcePvcName      string `json:"sourcePvcName,omitempty"`
+	SourcePvcNamespace string `json:"sourcePvcNamespace,omitempty"`
+	SecretName         string `json:"secretName,omitempty"`
+	RequestedMemory    string `json:"requestedMemory,omitempty"`
+	RequestedCPU       string `json:"requestedCPU,omitempty"`
+	MachineType        string `json:"machineType,omitempty"`
+	StorageClassName   string `json:"storageClassName,omitempty"`
+	// TODO: add here the required CPU, Memory, machine type
 	// TODO : add the ignition
 	// ignition    string `json:"pvcName,omitempty"`
 }

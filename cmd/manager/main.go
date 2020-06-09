@@ -16,6 +16,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuator"
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
@@ -56,11 +57,14 @@ func main() {
 		klog.Fatalf("Error getting configuration: %v", err)
 	}
 
-	// Setup a Manager
-	// TODO do we need to setup MetricsBindAddress: *metricsAddr
 	// metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	// No need to setup "SyncPeriod: &syncPeriod" because there is no reconciled instance implemented
-	opts := manager.Options{}
+	syncPeriod := 10 * time.Minute
+	opts := manager.Options{
+		SyncPeriod: &syncPeriod,
+		// Disable metrics serving
+		MetricsBindAddress: "0",
+	}
 	if *watchNamespace != "" {
 		opts.Namespace = *watchNamespace
 		klog.Infof("Watching machine-api objects only in namespace %q for reconciliation.", opts.Namespace)
@@ -83,9 +87,9 @@ func main() {
 		klog.Fatalf("Error setting up scheme: %v", err)
 	}
 
-	providerVM := vm.New(kubevirtclient.NewClient, kubernetesClient)
+	providerVM := vm.New(kubevirtclient.NewClient, kubernetesClient, mgr.GetClient())
 	// Initialize machine actuator.
-	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("awscontroller"))
+	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("kubevirtcontroller"))
 
 	// TODO this is call to machine-api-operator/pkg/controller/machine
 	// In ovirt the call is to cluster-api/pkg/controller/machine
@@ -94,6 +98,7 @@ func main() {
 		klog.Fatalf("Error adding actuator: %v", err)
 	}
 
+	//TODO Remove that line after finishing debugging
 	entryLog.Info("@@@@@@@@@@@@@@@@ Before my changes")
 	// Start the Cmd
 	err = mgr.Start(ctrl.SetupSignalHandler())

@@ -4,9 +4,11 @@ go 1.13
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/mock v1.2.0
 	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/openshift/cluster-api v0.0.0-20191129101638-b09907ac6668 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3
 	golang.org/x/crypto v0.0.0-20191205180655-e7c4368fe9dd // indirect
 	gotest.tools v2.2.0+incompatible

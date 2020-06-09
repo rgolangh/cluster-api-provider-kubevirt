@@ -5,7 +5,9 @@ metadata:
   name: kubevirt-actuator-testing-machine8
   namespace: openshift-machine-api
   labels:
-    machine.openshift.io/cluster-api-cluster: kubevirt
+    # the namespace the vms will be created in
+    machine.openshift.io/cluster-api-cluster: openshift-machine-api
+#    machine.openshift.io/cluster-api-cluster: namespace-test
 spec:
   metadata:
     labels:
@@ -17,3 +19,9 @@ spec:
       kind: KubevirtMachineProviderSpec
       SecretName: underkube-config
       SourcePvcName: pvc-rhcos-image
+      SourcePvcNamespace: openshift-machine-api
+      RequestedMemory: "2048M"
+      RequestedCPU: ""
+      MachineType: ""
+      StorageClassName: ""
+

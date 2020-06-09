@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
+
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +30,12 @@ func initializeMachine(t *testing.T, mockKubevirtClient *mockkubevirtclient.Mock
 	return machine
 }
 
+func buildProviderSpec() *kubevirtproviderv1.KubevirtMachineProviderSpec {
+	providerSpec := kubevirtproviderv1.KubevirtMachineProviderSpec{}
+	providerSpec.SourcePvcName = "SourceTestPvcName"
+	providerSpec.SourcePvcNamespace = "test"
+	return &providerSpec
+}
 func TestCreate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
 	cases := []struct {
@@ -86,12 +94,12 @@ func TestCreate(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, buildProviderSpec())
 			if virtualMachineErr != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
 
-			returnVM, returnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			returnVM, returnVMErr := machineToVirtualMachine(machine, buildProviderSpec())
 			if returnVMErr != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", returnVMErr)
 			}
@@ -102,7 +110,7 @@ func TestCreate(t *testing.T) {
 			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
 				return mockKubevirtClient, nil
 			}
-			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			providerVMInstance := New(kubevirtClientMockBuilder, nil, nil)
 			createVMErr := providerVMInstance.Create(machine)
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, createVMErr.Error())
@@ -198,7 +206,7 @@ func TestDelete(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, buildProviderSpec())
 			if virtualMachineErr != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
@@ -213,7 +221,7 @@ func TestDelete(t *testing.T) {
 			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
 				return mockKubevirtClient, nil
 			}
-			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			providerVMInstance := New(kubevirtClientMockBuilder, nil, nil)
 			deleteVMErr := providerVMInstance.Delete(machine)
 
 			if tc.wantValidateMachineErr != "" {
@@ -276,7 +284,7 @@ func TestExists(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, buildProviderSpec())
 			if virtualMachineErr != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
@@ -291,7 +299,7 @@ func TestExists(t *testing.T) {
 			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
 				return mockKubevirtClient, nil
 			}
-			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			providerVMInstance := New(kubevirtClientMockBuilder, nil, nil)
 			existsVM, existsVMErr := providerVMInstance.Exists(machine)
 
 			if tc.clientGetError != nil {
@@ -398,15 +406,14 @@ func TestUpdate(t *testing.T) {
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
-
-			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, buildProviderSpec())
 			if virtualMachineErr != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", virtualMachineErr)
 			}
 
 			var getReturnVM *kubevirtapiv1.VirtualMachine
 			if !tc.emptyGetVM {
-				returnVMResult, returnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+				returnVMResult, returnVMErr := machineToVirtualMachine(machine, buildProviderSpec())
 				if returnVMErr != nil {
 					t.Fatalf("Unable to build virtual machine with error: %v", returnVMErr)
 				}
@@ -415,20 +422,18 @@ func TestUpdate(t *testing.T) {
 
 			}
 
-			updateReturnVM, updateReturnVMErr := machineToVirtualMachine(machine, "SourceTestPvcName")
+			updateReturnVM, updateReturnVMErr := machineToVirtualMachine(machine, buildProviderSpec())
 			if updateReturnVMErr != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", updateReturnVMErr)
 			}
 
 			mockKubevirtClient.EXPECT().GetVirtualMachine(defaultNamespace, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetError).AnyTimes()
 			mockKubevirtClient.EXPECT().UpdateVirtualMachine(defaultNamespace, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
-			// TODO: added cases when existingVM == nil :
-			// p.machine.Spec.ProviderID != nil && *p.machine.Spec.ProviderID != "" && (p.machine.Status.LastUpdated == nil || p.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now())) - return error
-			// else - another error
+
 			kubevirtClientMockBuilder := func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (kubevirtClient.Client, error) {
 				return mockKubevirtClient, nil
 			}
-			providerVMInstance := New(kubevirtClientMockBuilder, nil)
+			providerVMInstance := New(kubevirtClientMockBuilder, nil, nil)
 
 			updateVMErr := providerVMInstance.Update(machine)
 

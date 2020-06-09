@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
@@ -36,13 +38,16 @@ type manager struct {
 	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
 	// api server controller runtime client
 	kubernetesClient *kubernetesclient.Clientset
+	// api server controller runtime client
+	runtimeClient runtimeclient.Client
 }
 
 // New creates provider vm instance
-func New(kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType, kubernetesClient *kubernetesclient.Clientset) ProviderVM {
+func New(kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType, kubernetesClient *kubernetesclient.Clientset, runtimeClient runtimeclient.Client) ProviderVM {
 	return &manager{
 		kubernetesClient:      kubernetesClient,
 		kubevirtClientBuilder: kubevirtClientBuilder,
+		runtimeClient:         runtimeClient,
 	}
 }
 
@@ -56,9 +61,9 @@ func (m *manager) Create(machine *machinev1.Machine) (err error) {
 	defer func() {
 		// After the operation is done (success or failure)
 		// Update the machine object with the relevant changes
-		patchhMachineErr := machineScope.patchMachine()
-		if patchhMachineErr != nil {
-			err = patchhMachineErr
+		patchMachineErr := machineScope.patchMachine()
+		if patchMachineErr != nil {
+			err = patchMachineErr
 		}
 	}()
 
@@ -99,8 +104,7 @@ func (m *manager) Delete(machine *machinev1.Machine) (err error) {
 			err = patchhMachineErr
 		}
 	}()
-
-	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
+	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
 	if existingVMErr != nil {
 		// TODO ask Nir how to check it  github.com/jinzhu/gorm  + gorm.IsRecordNotFoundError(existingVMErr)
 		if strings.Contains(existingVMErr.Error(), "not found") {
@@ -116,7 +120,7 @@ func (m *manager) Delete(machine *machinev1.Machine) (err error) {
 		return nil
 	}
 
-	if deleteVMErr := m.deleteVM(machineScope.virtualMachine.GetName(), machineScope); deleteVMErr != nil {
+	if deleteVMErr := m.deleteVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope); deleteVMErr != nil {
 		return fmt.Errorf("failed to delete VM: %w", deleteVMErr)
 	}
 
@@ -141,7 +145,7 @@ func (m *manager) Update(machine *machinev1.Machine) (err error) {
 		}
 	}()
 
-	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
+	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
 	if existingVMErr != nil {
 		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), existingVMErr)
 		return existingVMErr
@@ -177,7 +181,7 @@ func (m *manager) Update(machine *machinev1.Machine) (err error) {
 	klog.Infof("Updated machine %s", machineScope.getMachineName())
 	machineScope.setProviderStatus(updatedVM, conditionSuccess())
 
-	getUpdatedVM, getUpdatedVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
+	getUpdatedVM, getUpdatedVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
 	if getUpdatedVMErr != nil {
 		klog.Errorf("%s: error getting updated VM: %v", machineScope.getMachineName(), existingVMErr)
 		getUpdatedVM = updatedVM
@@ -192,7 +196,7 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 		return false, machineScopeErr
 	}
 
-	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope)
+	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
 	if existingVMErr != nil {
 		// TODO ask Nir how to check it  github.com/jinzhu/gorm  + gorm.IsRecordNotFoundError(existingVMErr)
 		if strings.Contains(existingVMErr.Error(), "not found") {
@@ -210,7 +214,7 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 }
 
 func (m *manager) prepareMachineScope(machine *machinev1.Machine, action string) (*machineScope, error) {
-	machineScope, machineScopeErr := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	machineScope, machineScopeErr := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder, m.runtimeClient)
 	if machineScopeErr != nil {
 		return nil, machineScopeErr
 	}
@@ -221,20 +225,22 @@ func (m *manager) prepareMachineScope(machine *machinev1.Machine, action string)
 }
 
 func (m *manager) createVM(virtualMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.CreateVirtualMachine(machineScope.getMachineNamespace(), virtualMachine)
+	return machineScope.kubevirtClient.CreateVirtualMachine(virtualMachine.Namespace, virtualMachine)
 }
 
-func (m *manager) getVM(vmName string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.GetVirtualMachine(machineScope.getMachineNamespace(), vmName, &k8smetav1.GetOptions{})
+func (m *manager) getVM(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
+	// TODO: virtualMachine.Namespace
+	return machineScope.kubevirtClient.GetVirtualMachine(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
 
-func (m *manager) deleteVM(vmName string, machineScope *machineScope) error {
+func (m *manager) deleteVM(vmName, vmNamespace string, machineScope *machineScope) error {
 	gracePeriod := int64(10)
-	return machineScope.kubevirtClient.DeleteVirtualMachine(machineScope.getMachineNamespace(), vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
+	// TODO: virtualMachine.Namespace
+	return machineScope.kubevirtClient.DeleteVirtualMachine(vmNamespace, vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
 }
 
 func (m *manager) updateVM(updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.UpdateVirtualMachine(machineScope.getMachineNamespace(), updatedVM)
+	return machineScope.kubevirtClient.UpdateVirtualMachine(updatedVM.Namespace, updatedVM)
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane

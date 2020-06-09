@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetesclient "k8s.io/client-go/kubernetes"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 	cdiv1 "kubevirt.io/containerized-data-importer/pkg/apis/core/v1alpha1"
@@ -28,12 +31,17 @@ const (
 type machineScope struct {
 	// api server controller runtime client
 	kubevirtClient kubevirtclient.Client
+	// api server controller runtime client
+	runtimeClient runtimeclient.Client
+
 	// machine resource
 	machine        *machinev1.Machine
 	virtualMachine *kubevirtapiv1.VirtualMachine
+	// MachineCopy is used to generate a patch diff at the end of the scope's lifecycle.
+	machineToBePatched runtimeclient.Patch
 }
 
-func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetesclient.Clientset, kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType) (*machineScope, error) {
+func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetesclient.Clientset, kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType, runtimeClient runtimeclient.Client) (*machineScope, error) {
 	if validateMachineErr := validateMachine(*machine); validateMachineErr != nil {
 		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), validateMachineErr)
 	}
@@ -49,37 +57,41 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetescli
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
-	virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, providerSpec.SourcePvcName)
+	virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, providerSpec)
 	if virtualMachineErr != nil {
 		return nil, virtualMachineErr
 	}
 
-	// TODO Nir - Add other virtualMachine params
-
 	return &machineScope{
-		kubevirtClient: kubevirtClient,
-		machine:        machine,
-		virtualMachine: virtualMachine,
+		kubevirtClient:     kubevirtClient,
+		machine:            machine,
+		virtualMachine:     virtualMachine,
+		runtimeClient:      runtimeClient,
+		machineToBePatched: runtimeclient.MergeFrom(machine.DeepCopy()),
 	}, nil
 }
 
-func machineToVirtualMachine(machine *machinev1.Machine, sourcePvcName string) (*kubevirtapiv1.VirtualMachine, error) {
-	//runningState := true
+func machineToVirtualMachine(machine *machinev1.Machine, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec) (*kubevirtapiv1.VirtualMachine, error) {
 	runAlways := kubevirtapiv1.RunStrategyAlways
-
+	// use getClusterID as a namespace
 	providerStatus, err := kubevirtproviderv1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
+	namespace, ok := getClusterID(machine)
+	// TODO: if there isnt a cluster id - need to return an error
+	if !ok {
+		namespace = machine.Namespace
+	}
+
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
-			//Running: &runningState,
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(machine.GetName(), sourcePvcName, machine.GetNamespace()),
+				*buildBootVolumeDataVolumeTemplate(machine.GetName(), providerSpec.SourcePvcName, namespace, providerSpec.SourcePvcNamespace),
 			},
-			Template: buildVMITemplate(machine.GetName()),
+			Template: buildVMITemplate(machine.GetName(), providerSpec),
 		},
 		Status: providerStatus.VirtualMachineStatus,
 	}
@@ -88,7 +100,7 @@ func machineToVirtualMachine(machine *machinev1.Machine, sourcePvcName string) (
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name: machine.Name,
 		//GenerateName:               "",
-		Namespace:       machine.Namespace,
+		Namespace:       namespace,
 		Labels:          machine.Labels,
 		Annotations:     machine.Annotations,
 		OwnerReferences: machine.OwnerReferences,
@@ -181,7 +193,10 @@ func (s *machineScope) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.Virtua
 	return nil
 }
 
-func buildVMITemplate(virtualMachineName string) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
+func buildDataVolumeDiskName(virtualMachineName string) string {
+	return virtualMachineName + defaultDataVolumeDiskName
+}
+func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
 
 	template.ObjectMeta = metav1.ObjectMeta{
@@ -192,7 +207,7 @@ func buildVMITemplate(virtualMachineName string) *kubevirtapiv1.VirtualMachineIn
 	template.Spec.Volumes = []kubevirtapiv1.Volume{
 		{
 			// TODO : use the machine-name in order to determine the volume
-			Name: defaultDataVolumeDiskName,
+			Name: buildDataVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				DataVolume: &kubevirtapiv1.DataVolumeSource{
 					Name: buildBootVolumeName(virtualMachineName),
@@ -204,21 +219,26 @@ func buildVMITemplate(virtualMachineName string) *kubevirtapiv1.VirtualMachineIn
 	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
 
 	requests := corev1.ResourceList{}
-	//Memory:
-	requests[corev1.ResourceMemory] = apiresource.MustParse(defaultRequestedMemory)
 
-	//CPU:
-	//requests[corev1.ResourceCPU] = apiresource.MustParse("2")
+	requestedMemory := providerSpec.RequestedMemory
+	if requestedMemory == "" {
+		requestedMemory = defaultRequestedMemory
+	}
+	requests[corev1.ResourceMemory] = apiresource.MustParse(requestedMemory)
+
+	if providerSpec.RequestedCPU != "" {
+		requests[corev1.ResourceCPU] = apiresource.MustParse(providerSpec.RequestedCPU)
+	}
 
 	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
 		Requests: requests,
 	}
 	// TODO: get the machine type from machine.yaml
-	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: ""}
+	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: providerSpec.MachineType}
 	template.Spec.Domain.Devices = kubevirtapiv1.Devices{
 		Disks: []kubevirtapiv1.Disk{
 			{
-				Name: defaultDataVolumeDiskName,
+				Name: buildDataVolumeDiskName(virtualMachineName),
 			},
 		},
 	}
@@ -229,24 +249,23 @@ func buildVMITemplate(virtualMachineName string) *kubevirtapiv1.VirtualMachineIn
 func buildBootVolumeName(virtualMachineName string) string {
 	return virtualMachineName + "-bootvolume"
 }
-func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string, namespace string) *cdiv1.DataVolume {
-	// TODO Nir - add spec to data volume
+func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace string) *cdiv1.DataVolume {
 	return &cdiv1.DataVolume{
 		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      buildBootVolumeName(virtualMachineName),
-			Namespace: namespace,
+			Namespace: dvNamespace,
 		},
-		// TODO: ERROR: [spec.pvc.resources.requests: Required value, spec.pvc.accessModes: Required value
 		Spec: cdiv1.DataVolumeSpec{
 			Source: cdiv1.DataVolumeSource{
 				PVC: &cdiv1.DataVolumeSourcePVC{
 					Name:      pvcName,
-					Namespace: namespace,
+					Namespace: dvNamespace,
+					//Namespace: pvcNamespace,
 				},
 			},
 			PVC: &corev1.PersistentVolumeClaimSpec{
-				// TODO: Need to determin it by the type of storage class
+				// TODO: Need to determine it by the type of storage class: pvc.Spec.StorageClassName
 				AccessModes: []corev1.PersistentVolumeAccessMode{
 					defaultPersistentVolumeAccessMode,
 				},
@@ -263,30 +282,42 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName string, pvcName string
 
 // Patch patches the machine spec and machine status after reconciling.
 func (s *machineScope) patchMachine() error {
-	// TODO implement if needed otherwise remove
-	// klog.V(3).Infof("%v: patching machine", s.machine.GetName())
+	// TODO: resourceVersion
+	// TODO: dnsName
+	// TODO: NodeInternalIP of VM
 
-	// providerStatus, err := kubevirtproviderv1.RawExtensionFromProviderStatus(providerStatusFromVirtualMachineStatus(&s.virtualMachine.Status))
-	// if err != nil {
-	// 	return machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
-	// }
-	// s.machine.Status.ProviderStatus = providerStatus
+	s.setProviderID(s.virtualMachine)
 
-	// statusCopy := *s.machine.Status.DeepCopy()
+	if err := s.setMachineCloudProviderSpecifics(s.virtualMachine); err != nil {
+		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
+	}
 
-	// // patch machine
-	// if err := s.client.Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
-	// 	klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
-	// 	return err
-	// }
+	klog.Infof("Updated machine %s", s.getMachineName())
+	if err := s.setProviderStatus(s.virtualMachine, conditionSuccess()); err != nil {
+		return machineapierros.InvalidMachineConfiguration("failed to set machine provider status: %v", err.Error())
+	}
+	klog.V(3).Infof("%v: patching machine", s.machine.GetName())
 
-	// s.machine.Status = statusCopy
+	providerStatus, err := kubevirtproviderv1.RawExtensionFromProviderStatus(providerStatusFromVirtualMachineStatus(&s.virtualMachine.Status))
+	if err != nil {
+		return machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
+	}
+	s.machine.Status.ProviderStatus = providerStatus
 
-	// // patch status
-	// if err := s.client.Status().Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
-	// 	klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
-	// 	return err
-	// }
+	// patch machine
+	statusCopy := *s.machine.Status.DeepCopy()
+	if err := s.runtimeClient.Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+		klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
+		return err
+	}
+
+	s.machine.Status = statusCopy
+
+	// patch status
+	if err := s.runtimeClient.Status().Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+		klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
+		return err
+	}
 
 	return nil
 }
@@ -310,6 +341,7 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, condi
 		s.virtualMachine.Status = vm.Status
 
 		// Copy specific adresses - only node adresses
+		// TODO: implement it
 		addresses, err := extractNodeAddresses(vm)
 		if err != nil {
 			klog.Errorf("%s: Error extracting vm IP addresses: %v", s.machine.GetName(), err)
