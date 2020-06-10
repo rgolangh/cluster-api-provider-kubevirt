@@ -1,19 +1,17 @@
 package vm
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubernetesclient "k8s.io/client-go/kubernetes"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
@@ -29,21 +27,16 @@ const (
 )
 
 type machineScope struct {
-	// api server controller runtime client
-	kubevirtClient kubevirtclient.Client
-	// api server controller runtime client
-	runtimeClient runtimeclient.Client
-
-	// machine resource
-	machine        *machinev1.Machine
-	virtualMachine *kubevirtapiv1.VirtualMachine
-	// MachineCopy is used to generate a patch diff at the end of the scope's lifecycle.
-	machineToBePatched runtimeclient.Patch
+	kubevirtClient    kubevirtclient.Client
+	kubernetesClient  kubernetesclient.Client
+	machine           *machinev1.Machine
+	originMachineCopy *machinev1.Machine
+	virtualMachine    *kubevirtapiv1.VirtualMachine
 }
 
-func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetesclient.Clientset, kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType, runtimeClient runtimeclient.Client) (*machineScope, error) {
-	if validateMachineErr := validateMachine(*machine); validateMachineErr != nil {
-		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), validateMachineErr)
+func newMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclient.Client, kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType) (*machineScope, error) {
+	if err := validateMachine(*machine); err != nil {
+		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), err)
 	}
 
 	providerSpec, err := kubevirtproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
@@ -52,35 +45,35 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetescli
 	}
 
 	kubevirtClient, err := kubevirtClientBuilder(kubernetesClient, providerSpec.SecretName, machine.GetNamespace())
-
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
-	virtualMachine, virtualMachineErr := machineToVirtualMachine(machine, providerSpec)
-	if virtualMachineErr != nil {
-		return nil, virtualMachineErr
+	virtualMachine, err := machineToVirtualMachine(machine, providerSpec)
+	if err != nil {
+		return nil, err
 	}
 
 	return &machineScope{
-		kubevirtClient:     kubevirtClient,
-		machine:            machine,
-		virtualMachine:     virtualMachine,
-		runtimeClient:      runtimeClient,
-		machineToBePatched: runtimeclient.MergeFrom(machine.DeepCopy()),
+		kubevirtClient:    kubevirtClient,
+		kubernetesClient:  kubernetesClient,
+		machine:           machine,
+		originMachineCopy: machine.DeepCopy(),
+		virtualMachine:    virtualMachine,
 	}, nil
 }
 
 func machineToVirtualMachine(machine *machinev1.Machine, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec) (*kubevirtapiv1.VirtualMachine, error) {
 	runAlways := kubevirtapiv1.RunStrategyAlways
-	// use getClusterID as a namespace
+
 	providerStatus, err := kubevirtproviderv1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	namespace, ok := getClusterID(machine)
+	// use getClusterID as a namespace
 	// TODO: if there isnt a cluster id - need to return an error
+	namespace, ok := getClusterID(machine)
 	if !ok {
 		namespace = machine.Namespace
 	}
@@ -98,8 +91,7 @@ func machineToVirtualMachine(machine *machinev1.Machine, providerSpec *kubevirtp
 
 	virtualMachine.TypeMeta = machine.TypeMeta
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
-		Name: machine.Name,
-		//GenerateName:               "",
+		Name:            machine.Name,
 		Namespace:       namespace,
 		Labels:          machine.Labels,
 		Annotations:     machine.Annotations,
@@ -125,19 +117,21 @@ func (s *machineScope) setProviderID(vm *kubevirtapiv1.VirtualMachine) {
 	if vm == nil {
 		return
 	}
+
 	providerID := fmt.Sprintf("kubevirt:///%s/%s", s.getMachineNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
 		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", s.getMachineName(), *existingProviderID)
 		return
 	}
+
 	s.machine.Spec.ProviderID = &providerID
 	klog.Infof("%s: ProviderID set at machine spec: %s", s.getMachineName(), providerID)
 }
 
+// updateAllowed validates that updates come in the right order
+// if there is an update that was supposes to be done after that update - return an error
 func (s *machineScope) updateAllowed() bool {
-	// validate that updates come in the right order
-	// if there is an update that was supposes to be done after that update - return an error
 	return s.machine.Spec.ProviderID != nil && *s.machine.Spec.ProviderID != "" && (s.machine.Status.LastUpdated == nil || s.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now()))
 }
 
@@ -196,6 +190,7 @@ func (s *machineScope) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.Virtua
 func buildDataVolumeDiskName(virtualMachineName string) string {
 	return virtualMachineName + defaultDataVolumeDiskName
 }
+
 func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
 
@@ -249,6 +244,7 @@ func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv
 func buildBootVolumeName(virtualMachineName string) string {
 	return virtualMachineName + "-bootvolume"
 }
+
 func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace string) *cdiv1.DataVolume {
 	return &cdiv1.DataVolume{
 		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
@@ -306,7 +302,7 @@ func (s *machineScope) patchMachine() error {
 
 	// patch machine
 	statusCopy := *s.machine.Status.DeepCopy()
-	if err := s.runtimeClient.Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+	if err := s.kubernetesClient.PatchMachine(s.machine, s.originMachineCopy); err != nil {
 		klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
 		return err
 	}
@@ -314,7 +310,7 @@ func (s *machineScope) patchMachine() error {
 	s.machine.Status = statusCopy
 
 	// patch status
-	if err := s.runtimeClient.Status().Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+	if err := s.kubernetesClient.StatusPatchMachine(s.machine, s.originMachineCopy); err != nil {
 		klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
 		return err
 	}

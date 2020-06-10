@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuator"
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/managers/vm"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
-	kubernetesclient "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/klog"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -44,9 +44,6 @@ func main() {
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 
-	// TODO what is the difference between this way to start the logger than the way it startes in aws?
-	// ctrl.SetLogger(klogr.New())
-	// setupLog := ctrl.Log.WithName("setup")
 	log := logf.Log.WithName("kubevirt-controller-manager")
 	logf.SetLogger(logf.ZapLogger(false))
 	entryLog := log.WithName("entrypoint")
@@ -57,7 +54,6 @@ func main() {
 		klog.Fatalf("Error getting configuration: %v", err)
 	}
 
-	// metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	// No need to setup "SyncPeriod: &syncPeriod" because there is no reconciled instance implemented
 	syncPeriod := 10 * time.Minute
 	opts := manager.Options{
@@ -65,44 +61,43 @@ func main() {
 		// Disable metrics serving
 		MetricsBindAddress: "0",
 	}
+
 	if *watchNamespace != "" {
 		opts.Namespace = *watchNamespace
 		klog.Infof("Watching machine-api objects only in namespace %q for reconciliation.", opts.Namespace)
 	}
+
 	mgr, err := manager.New(cfg, opts)
 	if err != nil {
 		entryLog.Error(err, "Unable to set up overall controller manager")
 		os.Exit(1)
 	}
 
-	// Initialize overKube kubernetes client
-	kubernetesClient, err := kubernetesclient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		entryLog.Error(err, "Failed to create kubernetes client from configuration")
-	}
-
 	// Setup Scheme for all resources
-	// TODO do we need to use internal api.AddToScheme (for example in ovirt)
 	if err := mapiv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
 		klog.Fatalf("Error setting up scheme: %v", err)
 	}
 
-	providerVM := vm.New(kubevirtclient.NewClient, kubernetesClient, mgr.GetClient())
+	// Initialize overKube kubernetes client
+	// TODO Consider change the kubernetesclient name (overkubeclient / runtimeclient)
+	kubernetesClient, err := kubernetesclient.New(mgr)
+	if err != nil {
+		entryLog.Error(err, "Failed to create kubernetes client from configuration")
+	}
+
+	// Initialize provider vm manager
+	providerVM := vm.New(kubevirtclient.New, kubernetesClient)
+
 	// Initialize machine actuator.
 	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("kubevirtcontroller"))
 
-	// TODO this is call to machine-api-operator/pkg/controller/machine
-	// In ovirt the call is to cluster-api/pkg/controller/machine
-	// What is the difference? which one is better?
+	// Register Actuator on machine-controller
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {
 		klog.Fatalf("Error adding actuator: %v", err)
 	}
 
-	//TODO Remove that line after finishing debugging
-	entryLog.Info("@@@@@@@@@@@@@@@@ Before my changes")
 	// Start the Cmd
-	err = mgr.Start(ctrl.SetupSignalHandler())
-	if err != nil {
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		klog.Fatalf("Error starting manager: %v", err)
 	}
 }
