@@ -40,4 +40,5 @@ type KubevirtMachineProviderSpec struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type KubevirtMachineProviderStatus struct {
 	kubevirtapiv1.VirtualMachineStatus
+	ResourceVersion string `json:"resourceVersion,omitempty"`
 }

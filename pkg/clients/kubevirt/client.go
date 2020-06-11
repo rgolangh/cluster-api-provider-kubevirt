@@ -42,6 +42,7 @@ type Client interface {
 	CreateVirtualMachine(namespace string, newVM *v1.VirtualMachine) (*v1.VirtualMachine, error)
 	DeleteVirtualMachine(namespace string, name string, options *k8smetav1.DeleteOptions) error
 	GetVirtualMachine(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachine, error)
+	GetVirtualMachineInstance(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachineInstance, error)
 	ListVirtualMachine(namespace string, options *k8smetav1.ListOptions) (*v1.VirtualMachineList, error)
 	UpdateVirtualMachine(namespace string, vm *v1.VirtualMachine) (*v1.VirtualMachine, error)
 	PatchVirtualMachine(namespace string, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.VirtualMachine, err error)
@@ -103,6 +104,10 @@ func (c *kubevirtClient) DeleteVirtualMachine(namespace string, name string, opt
 
 func (c *kubevirtClient) GetVirtualMachine(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachine, error) {
 	return c.kubecliclient.VirtualMachine(namespace).Get(name, options)
+}
+
+func (c *kubevirtClient) GetVirtualMachineInstance(namespace string, name string, options *k8smetav1.GetOptions) (*v1.VirtualMachineInstance, error) {
+	return c.kubecliclient.VirtualMachineInstance(namespace).Get(name, options)
 }
 
 func (c *kubevirtClient) ListVirtualMachine(namespace string, options *k8smetav1.ListOptions) (*v1.VirtualMachineList, error) {

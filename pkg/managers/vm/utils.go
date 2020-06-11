@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"net"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -96,63 +97,23 @@ func shouldUpdateCondition(newCondition, existingCondition *kubevirtapiv1.Virtua
 // TODO Networks are located in vmi, need to add
 // The network info is saved in the vmi
 // extractNodeAddresses maps the instance information from Vmi to an array of NodeAddresses
-func extractNodeAddresses(vm *kubevirtapiv1.VirtualMachine) ([]corev1.NodeAddress, error) {
+func extractNodeAddresses(vmi *kubevirtapiv1.VirtualMachineInstance) ([]corev1.NodeAddress, error) {
 	// Not clear if the order matters here, but we might as well indicate a sensible preference order
 
-	if vm == nil {
-		return nil, fmt.Errorf("nil vm passed to extractNodeAddresses")
+	if vmi == nil {
+		return nil, fmt.Errorf("nil vmi passed to extractNodeAddresses")
 	}
 
 	addresses := []corev1.NodeAddress{}
-
-	// TODO implement
-	// // handle internal network interfaces
-	// for _, networkInterface := range vm.Status. {
-	// 	// TODO Nir - In kubevirt there is not network state and IPV6
-	// 	// // skip network interfaces that are not currently in use
-	// 	// if aws.StringValue(networkInterface.Status) != ec2.NetworkInterfaceStatusInUse {
-	// 	// 	continue
-	// 	// }
-
-	// 	// TODO Does kubevirt use IPV6?
-	// 	// // Treating IPv6 addresses as type NodeInternalIP to match what the KNI
-	// 	// // patch to the AWS cloud-provider code is doing:
-	// 	// //
-	// 	// // https://github.com/openshift-kni/origin/commit/7db21c1e26a344e25ae1b825d4f21e7bef5c3650
-	// 	// for _, ipv6Address := range networkInterface.Ipv6Addresses {
-	// 	// 	if addr := aws.StringValue(ipv6Address.Ipv6Address); addr != "" {
-	// 	// 		ip := net.ParseIP(addr)
-	// 	// 		if ip == nil {
-	// 	// 			return nil, fmt.Errorf("EC2 instance had invalid IPv6 address: %s (%q)", aws.StringValue(instance.InstanceId), addr)
-	// 	// 		}
-	// 	// 		addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
-	// 	// 	}
-	// 	// }
-
-	// 	for _, ipAddress := range networkInterface.IPs {
-	// 		if ipAddress != "" {
-	// 			ip := net.ParseIP(ipAddress)
-	// 			if ip == nil {
-	// 				return nil, fmt.Errorf("KubeVirt instance had invalid IP address: %s (%q)", string(instance.UID), ipAddress)
-	// 			}
-	// 			// TODO Nir - Modify NodeAddressType according to ip info (public, private, etc ...)
-	// 			addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
-	// 		}
-	// 	}
-	// }
-
-	// TODO Nir - Get DNS name, public and private
-	// privateDNSName := aws.StringValue(instance.PrivateDnsName)
-	// if privateDNSName != "" {
-	// 	addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalDNS, Address: privateDNSName})
-	// 	addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeHostName, Address: privateDNSName})
-	// }
-
-	// publicDNSName := aws.StringValue(instance.PublicDnsName)
-	// if publicDNSName != "" {
-	// 	addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeExternalDNS, Address: publicDNSName})
-	// }
-
+	//TODO: get the vmi IP
+	ips, err := net.LookupIP(vmi.Name)
+	if err == nil {
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
+			}
+		}
+	}
 	return addresses, nil
 }
 

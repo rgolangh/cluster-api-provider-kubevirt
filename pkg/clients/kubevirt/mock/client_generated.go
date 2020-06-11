@@ -79,6 +79,21 @@ func (mr *MockClientMockRecorder) GetVirtualMachine(namespace, name, options int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachine", reflect.TypeOf((*MockClient)(nil).GetVirtualMachine), namespace, name, options)
 }
 
+// GetVirtualMachineInstance mocks base method
+func (m *MockClient) GetVirtualMachineInstance(namespace, name string, options *v1.GetOptions) (*v10.VirtualMachineInstance, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVirtualMachineInstance", namespace, name, options)
+	ret0, _ := ret[0].(*v10.VirtualMachineInstance)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVirtualMachineInstance indicates an expected call of GetVirtualMachineInstance
+func (mr *MockClientMockRecorder) GetVirtualMachineInstance(namespace, name, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineInstance", reflect.TypeOf((*MockClient)(nil).GetVirtualMachineInstance), namespace, name, options)
+}
+
 // ListVirtualMachine mocks base method
 func (m *MockClient) ListVirtualMachine(namespace string, options *v1.ListOptions) (*v10.VirtualMachineList, error) {
 	m.ctrl.T.Helper()

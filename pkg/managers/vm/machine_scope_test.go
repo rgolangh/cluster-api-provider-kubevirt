@@ -37,7 +37,7 @@ func TestGetUserData(t *testing.T) {
 	// testCases := []struct {
 	// 	testCase         string
 	// 	userDataSecret   *corev1.Secret
-	// 	providerSpec     *awsproviderv1.AWSMachineProviderConfig
+	// 	machineProviderSpec     *awsproviderv1.AWSMachineProviderConfig
 	// 	expectedUserdata []byte
 	// 	expectError      bool
 	// }{
@@ -52,14 +52,14 @@ func TestGetUserData(t *testing.T) {
 	// 				userDataSecretKey: []byte("{}"),
 	// 			},
 	// 		},
-	// 		providerSpec:     defaultProviderSpec,
+	// 		machineProviderSpec:     defaultProviderSpec,
 	// 		expectedUserdata: []byte("{}"),
 	// 		expectError:      false,
 	// 	},
 	// 	{
 	// 		testCase:       "missing secret",
 	// 		userDataSecret: nil,
-	// 		providerSpec:   defaultProviderSpec,
+	// 		machineProviderSpec:   defaultProviderSpec,
 	// 		expectError:    true,
 	// 	},
 	// 	{
@@ -73,20 +73,20 @@ func TestGetUserData(t *testing.T) {
 	// 				"badKey": []byte("{}"),
 	// 			},
 	// 		},
-	// 		providerSpec: defaultProviderSpec,
+	// 		machineProviderSpec: defaultProviderSpec,
 	// 		expectError:  true,
 	// 	},
 	// 	{
 	// 		testCase:         "no provider spec",
 	// 		userDataSecret:   nil,
-	// 		providerSpec:     nil,
+	// 		machineProviderSpec:     nil,
 	// 		expectError:      false,
 	// 		expectedUserdata: nil,
 	// 	},
 	// 	{
 	// 		testCase:         "no user-data in provider spec",
 	// 		userDataSecret:   nil,
-	// 		providerSpec:     &awsproviderv1.AWSMachineProviderConfig{},
+	// 		machineProviderSpec:     &awsproviderv1.AWSMachineProviderConfig{},
 	// 		expectError:      false,
 	// 		expectedUserdata: nil,
 	// 	},
@@ -107,8 +107,8 @@ func TestGetUserData(t *testing.T) {
 	// 		ms := &machineScope{
 	// 			Context:      context.Background(),
 	// 			client:       client,
-	// 			machine:      machineWithSpec(tc.providerSpec),
-	// 			providerSpec: tc.providerSpec,
+	// 			machine:      machineWithSpec(tc.machineProviderSpec),
+	// 			machineProviderSpec: tc.machineProviderSpec,
 	// 		}
 
 	// 		userData, err := ms.getUserData()
@@ -156,7 +156,7 @@ func TestPatchMachine(t *testing.T) {
 
 	// failedPhase := "Failed"
 
-	// providerStatus := &awsproviderv1.AWSMachineProviderStatus{}
+	// machineProviderStatus := &awsproviderv1.AWSMachineProviderStatus{}
 
 	// testCases := []struct {
 	// 	name   string
@@ -192,20 +192,20 @@ func TestPatchMachine(t *testing.T) {
 	// 		mutate: func(m *machinev1.Machine) {
 	// 			instanceID := "123"
 	// 			instanceState := "running"
-	// 			providerStatus.InstanceID = &instanceID
-	// 			providerStatus.InstanceState = &instanceState
+	// 			machineProviderStatus.InstanceID = &instanceID
+	// 			machineProviderStatus.InstanceState = &instanceState
 	// 		},
 	// 		expect: func(m *machinev1.Machine) error {
-	// 			providerStatus, err := awsproviderv1.ProviderStatusFromRawExtension(m.Status.ProviderStatus)
+	// 			machineProviderStatus, err := awsproviderv1.ProviderStatusFromRawExtension(m.Status.ProviderStatus)
 	// 			if err != nil {
 	// 				return fmt.Errorf("unable to get provider status: %v", err)
 	// 			}
 
-	// 			if providerStatus.InstanceID == nil || *providerStatus.InstanceID != "123" {
+	// 			if machineProviderStatus.InstanceID == nil || *machineProviderStatus.InstanceID != "123" {
 	// 				return fmt.Errorf("instanceID is nil or not equal expected \"123\"")
 	// 			}
 
-	// 			if providerStatus.InstanceState == nil || *providerStatus.InstanceState != "running" {
+	// 			if machineProviderStatus.InstanceState == nil || *machineProviderStatus.InstanceState != "running" {
 	// 				return fmt.Errorf("instanceState is nil or not equal expected \"running\"")
 	// 			}
 
@@ -251,7 +251,7 @@ func TestPatchMachine(t *testing.T) {
 
 	// 		tc.mutate(machineScope.machine)
 
-	// 		machineScope.providerStatus = providerStatus
+	// 		machineScope.machineProviderStatus = machineProviderStatus
 
 	// 		// Patch the machine and check the expectation from the test case
 	// 		gs.Expect(machineScope.patchMachine()).To(Succeed())

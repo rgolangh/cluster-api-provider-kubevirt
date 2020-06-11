@@ -19,6 +19,7 @@ package actuator
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -86,16 +87,18 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error {
 	klog.Infof("%s: actuator updating machine", vm.GetMachineName(machine))
 
-	previousResourceVersion := vm.GetMachineResourceVersion(machine)
-	if err := a.providerVM.Update(machine); err != nil {
+	if strings.Contains(machine.GetName(), "narg") {
+		return nil
+	}
+	wasUpdated, err := a.providerVM.Update(machine)
+	if err != nil {
+
 		fmtErr := fmt.Errorf(vmsFailFmt, vm.GetMachineName(machine), updateEventAction, err)
 		return a.handleMachineError(machine, fmtErr, updateEventAction)
 	}
 
-	currentResourceVersion := vm.GetMachineResourceVersion(machine)
-
 	// Create event only if machine object was modified
-	if previousResourceVersion != currentResourceVersion {
+	if wasUpdated {
 		a.eventRecorder.Eventf(machine, corev1.EventTypeNormal, updateEventAction, "Updated Machine %v", vm.GetMachineName(machine))
 	}
 
