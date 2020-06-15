@@ -18,7 +18,6 @@ package vm
 
 import (
 	"fmt"
-	"net"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,8 +92,6 @@ func shouldUpdateCondition(newCondition, existingCondition *kubevirtapiv1.Virtua
 	return newCondition.Reason != existingCondition.Reason || newCondition.Message != existingCondition.Message
 }
 
-// TODO Nir do we need to extract node adresses?
-// TODO Networks are located in vmi, need to add
 // The network info is saved in the vmi
 // extractNodeAddresses maps the instance information from Vmi to an array of NodeAddresses
 func extractNodeAddresses(vmi *kubevirtapiv1.VirtualMachineInstance) ([]corev1.NodeAddress, error) {
@@ -105,15 +102,13 @@ func extractNodeAddresses(vmi *kubevirtapiv1.VirtualMachineInstance) ([]corev1.N
 	}
 
 	addresses := []corev1.NodeAddress{}
-	//TODO: get the vmi IP
-	ips, err := net.LookupIP(vmi.Name)
-	if err == nil {
-		for _, ip := range ips {
-			if ip.To4() != nil {
-				addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
-			}
+	interfaces := vmi.Status.Interfaces
+	for _, i := range interfaces {
+		if i.IP != "" {
+			addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: i.IP})
 		}
 	}
+
 	return addresses, nil
 }
 
@@ -150,7 +145,6 @@ func validateMachine(machine machinev1.Machine) error {
 // getClusterID get cluster ID by machine.openshift.io/cluster-api-cluster label
 func getClusterID(machine *machinev1.Machine) (string, bool) {
 	clusterID, ok := machine.Labels[machinev1.MachineClusterIDLabel]
-	// TODO: remove 347-350
 	// NOTE: This block can be removed after the label renaming transition to machine.openshift.io
 	if !ok {
 		clusterID, ok = machine.Labels[upstreamMachineClusterIDLabel]

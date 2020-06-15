@@ -97,13 +97,13 @@ func TestCreate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
-			virtualMachine, err := machineToVirtualMachine(machineScope)
+			virtualMachine, err := machineScope.machineToVirtualMachine()
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 			vmi, _ := stubVmi(virtualMachine)
 
-			returnVM, err := machineToVirtualMachine(machineScope)
+			returnVM, err := machineScope.machineToVirtualMachine()
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -115,7 +115,8 @@ func TestCreate(t *testing.T) {
 			// TODO: test negative flow, return err != nil
 			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-
+			mockKubernetesClient.EXPECT().UserDataSecret("worker-user-data", machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			//userDataSecret, getSecretErr := machineScope.kubernetesClient.UserDataSecret(secretName, machineScope.machine.GetNamespace())
 			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
 			err = providerVMInstance.Create(machine)
 			if tc.wantValidateMachineErr != "" {
@@ -222,7 +223,7 @@ func TestDelete(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
-			virtualMachine, err := machineToVirtualMachine(machineScope)
+			virtualMachine, err := machineScope.machineToVirtualMachine()
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -316,7 +317,7 @@ func TestExists(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
-			virtualMachine, err := machineToVirtualMachine(machineScope)
+			virtualMachine, err := machineScope.machineToVirtualMachine()
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -449,14 +450,14 @@ func TestUpdate(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
-			virtualMachine, err := machineToVirtualMachine(machineScope)
+			virtualMachine, err := machineScope.machineToVirtualMachine()
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 			vmi, _ := stubVmi(virtualMachine)
 			var getReturnVM *kubevirtapiv1.VirtualMachine
 			if !tc.emptyGetVM {
-				returnVMResult, err := machineToVirtualMachine(machineScope)
+				returnVMResult, err := machineScope.machineToVirtualMachine()
 				if err != nil {
 					t.Fatalf("Unable to build virtual machine with error: %v", err)
 				}
@@ -465,7 +466,7 @@ func TestUpdate(t *testing.T) {
 
 			}
 
-			updateReturnVM, err := machineToVirtualMachine(machineScope)
+			updateReturnVM, err := machineScope.machineToVirtualMachine()
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}

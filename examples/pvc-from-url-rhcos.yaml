@@ -2,8 +2,9 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   annotations:
+    # https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.4/44.81.202003062006-0/x86_64/rhcos-44.81.202003062006-0-qemu.x86_64.qcow2.gz
     cdi.kubevirt.io/storage.import.endpoint: >-
-      https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.4/44.81.202003062006-0/x86_64/rhcos-44.81.202003062006-0-qemu.x86_64.qcow2.gz
+      https://releases-art-rhcos.svc.ci.openshift.org/art/storage/releases/rhcos-4.4/44.81.202003062006-0/x86_64/rhcos-44.81.202003062006-0-openstack.x86_64.qcow2.gz
   name: pvc-rhcos-image
   #namespace: namespace-test
   namespace: openshift-machine-api

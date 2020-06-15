@@ -52,7 +52,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 		return err
 	}
 
-	virtualMachineFromMachine, err := machineToVirtualMachine(machineScope)
+	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func (m *manager) Delete(machine *machinev1.Machine) (resultErr error) {
 		return err
 	}
 
-	virtualMachineFromMachine, err := machineToVirtualMachine(machineScope)
+	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,6 @@ func (m *manager) Delete(machine *machinev1.Machine) (resultErr error) {
 	if err := m.deleteVM(existingVM.GetName(), existingVM.GetNamespace(), machineScope); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
-	// TODO: what need to sync here???
 	machineScope.SyncMachineFromVm(nil, nil)
 
 	klog.Infof("Deleted machine %v", machineScope.getMachineName())
@@ -142,7 +141,7 @@ func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr
 		return false, err
 	}
 
-	virtualMachineFromMachine, err := machineToVirtualMachine(machineScope)
+	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
 	if err != nil {
 		return false, err
 	}
@@ -214,7 +213,7 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 		return false, err
 	}
 
-	virtualMachineFromMachine, err := machineToVirtualMachine(machineScope)
+	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
 	if err != nil {
 		return false, err
 	}
@@ -245,17 +244,14 @@ func (m *manager) createVM(virtualMachine *kubevirtapiv1.VirtualMachine, machine
 }
 
 func (m *manager) getVM(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	// TODO: virtualMachine.Namespace
 	return machineScope.kubevirtClient.GetVirtualMachine(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
 func (m *manager) getVMI(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachineInstance, error) {
-	// TODO: virtualMachine.Namespace
 	return machineScope.kubevirtClient.GetVirtualMachineInstance(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
 
 func (m *manager) deleteVM(vmName, vmNamespace string, machineScope *machineScope) error {
 	gracePeriod := int64(10)
-	// TODO: virtualMachine.Namespace
 	return machineScope.kubevirtClient.DeleteVirtualMachine(vmNamespace, vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
 }
 

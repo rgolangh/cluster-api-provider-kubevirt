@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/go-openapi/spec v0.19.3
-	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.2.0
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3
@@ -19,6 +19,7 @@ require (
 	// k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20200410145947-61e04a5be9a6
+	k8s.io/kubectl v0.0.0-20200124035537-9f7d91504e51
 	kubevirt.io/client-go v0.29.0
 	kubevirt.io/containerized-data-importer v1.10.9
 	sigs.k8s.io/controller-runtime v0.6.0

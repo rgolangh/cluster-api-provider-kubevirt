@@ -30,8 +30,8 @@ type KubevirtMachineProviderSpec struct {
 	RequestedCPU       string `json:"requestedCPU,omitempty"`
 	MachineType        string `json:"machineType,omitempty"`
 	StorageClassName   string `json:"storageClassName,omitempty"`
+	IgnitionSecretName string `json:"ignitionSecretName,omitempty"`
 	// TODO: add here the required CPU, Memory, machine type
-	// TODO : add the ignition
 	// ignition    string `json:"pvcName,omitempty"`
 }
 

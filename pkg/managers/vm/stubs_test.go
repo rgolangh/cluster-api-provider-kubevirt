@@ -3,6 +3,8 @@ package vm
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
@@ -28,12 +30,15 @@ func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineIns
 	vmi := kubevirtapiv1.VirtualMachineInstance{
 		//TypeMeta:   v12.TypeMeta{},
 		//ObjectMeta: v12.ObjectMeta{},
-		Spec:   kubevirtapiv1.VirtualMachineInstanceSpec{},
-		Status: kubevirtapiv1.VirtualMachineInstanceStatus{},
+		Spec: kubevirtapiv1.VirtualMachineInstanceSpec{},
+		Status: kubevirtapiv1.VirtualMachineInstanceStatus{
+			Interfaces: []kubevirtapiv1.VirtualMachineInstanceNetworkInterface{},
+		},
 	}
 	vmi.Name = vm.Name
 	vmi.Namespace = vm.Namespace
 	vmi.Spec = vm.Spec.Template.Spec
+
 	return &vmi, nil
 }
 
@@ -63,9 +68,17 @@ func stubMachineScope(machine *machinev1.Machine, kubernetesClient kubernetescli
 	}, nil
 }
 
+func stubSecret() *corev1.Secret {
+	secret := corev1.Secret{
+		Data: map[string][]byte{"userData": []byte("123")},
+	}
+	return &secret
+}
+
 func stubMachine(labels map[string]string, providerID string) (*machinev1.Machine, error) {
 	providerSpecValue, providerSpecValueErr := kubevirtproviderv1.RawExtensionFromProviderSpec(&kubevirtproviderv1.KubevirtMachineProviderSpec{
-		SourcePvcName: "SourceTestPvcName",
+		SourcePvcName:      "SourceTestPvcName",
+		IgnitionSecretName: "worker-user-data",
 	})
 	if labels == nil {
 		labels = map[string]string{

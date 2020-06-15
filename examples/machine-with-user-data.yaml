@@ -24,4 +24,5 @@ spec:
       RequestedCPU: ""
       MachineType: ""
       StorageClassName: ""
+      IgnitionSecretName: "worker-user-data"
 

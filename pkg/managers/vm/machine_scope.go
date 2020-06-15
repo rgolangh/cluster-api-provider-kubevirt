@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"time"
 
+	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
+
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
 	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
 	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
 	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
-	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,10 +29,13 @@ const (
 	defaultRequestedMemory                         = "2048M"
 	defaultPersistentVolumeAccessMode              = corev1.ReadWriteOnce
 	defaultDataVolumeDiskName                      = "datavolumedisk1"
+	defaultCloudInitVolumeDiskName                 = "cloudinitdisk"
+	defaultBootVolumeDiskName                      = "bootvolume"
 	kubevirtIdAnnotationKey                        = "VmId"
 	vmNotCreated                      machineState = "vmNotCreated"
 	vmCreatedNotReady                 machineState = "vmWasCreatedButNotReady"
 	vmCreatedAndReady                 machineState = "vmWasCreatedButAndReady"
+	userDataKey                                    = "userData"
 )
 
 type machineScope struct {
@@ -50,17 +54,17 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclie
 
 	providerSpec, err := kubevirtproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {
-		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine config: %v", err)
+		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine config: %v", err)
 	}
 
 	providerStatus, err := kubevirtproviderv1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
-		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
+		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
 	kubevirtClient, err := kubevirtClientBuilder(kubernetesClient, providerSpec.SecretName, machine.GetNamespace())
 	if err != nil {
-		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
+		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
 	return &machineScope{
@@ -73,36 +77,46 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclie
 	}, nil
 }
 
-func machineToVirtualMachine(machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
+func (s *machineScope) machineToVirtualMachine() (*kubevirtapiv1.VirtualMachine, error) {
 	runAlways := kubevirtapiv1.RunStrategyAlways
-
+	//running := true
 	// use getClusterID as a namespace
 	// TODO: if there isnt a cluster id - need to return an error
-	namespace, ok := getClusterID(machineScope.machine)
+	namespace, ok := getClusterID(s.machine)
 	if !ok {
-		namespace = machineScope.machine.Namespace
+		namespace = s.machine.Namespace
 	}
-
+	secretName := s.machineProviderSpec.IgnitionSecretName
+	userDataSecret, getSecretErr := s.kubernetesClient.UserDataSecret(secretName, s.machine.GetNamespace())
+	if getSecretErr != nil {
+		if apimachineryerrors.IsNotFound(getSecretErr) {
+			return nil, machinecontroller.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v not found", namespace, secretName, getSecretErr)
+		}
+		return nil, getSecretErr
+	}
+	userDataByte, ok := userDataSecret.Data[userDataKey]
+	userData := string(userDataByte)
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
+			//Running: &running,
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, machineScope.machineProviderSpec.SourcePvcNamespace),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.SourcePvcNamespace),
 			},
-			Template: buildVMITemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec),
+			Template: buildVMITemplate(s.machine.GetName(), s.machineProviderSpec, userData),
 		},
-		Status: machineScope.machineProviderStatus.VirtualMachineStatus,
+		Status: s.machineProviderStatus.VirtualMachineStatus,
 	}
 
-	virtualMachine.TypeMeta = machineScope.machine.TypeMeta
+	virtualMachine.TypeMeta = s.machine.TypeMeta
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
-		Name:            machineScope.machine.Name,
+		Name:            s.machine.Name,
 		Namespace:       namespace,
-		Labels:          machineScope.machine.Labels,
-		Annotations:     machineScope.machine.Annotations,
-		OwnerReferences: machineScope.machine.OwnerReferences,
-		ClusterName:     machineScope.machine.ClusterName,
-		ResourceVersion: machineScope.machineProviderStatus.ResourceVersion,
+		Labels:          s.machine.Labels,
+		Annotations:     s.machine.Annotations,
+		OwnerReferences: s.machine.OwnerReferences,
+		ClusterName:     s.machine.ClusterName,
+		ResourceVersion: s.machineProviderStatus.ResourceVersion,
 	}
 
 	return &virtualMachine, nil
@@ -178,10 +192,13 @@ func (s *machineScope) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.Virtua
 }
 
 func buildDataVolumeDiskName(virtualMachineName string) string {
-	return virtualMachineName + defaultDataVolumeDiskName
+	return virtualMachineName + "-" + defaultDataVolumeDiskName
+}
+func buildCloudInitVolumeDiskName(virtualMachineName string) string {
+	return virtualMachineName + "-" + defaultCloudInitVolumeDiskName
 }
 
-func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
+func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec, userData string) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
 
 	template.ObjectMeta = metav1.ObjectMeta{
@@ -191,11 +208,18 @@ func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv
 	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
 	template.Spec.Volumes = []kubevirtapiv1.Volume{
 		{
-			// TODO : use the machine-name in order to determine the volume
 			Name: buildDataVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				DataVolume: &kubevirtapiv1.DataVolumeSource{
 					Name: buildBootVolumeName(virtualMachineName),
+				},
+			},
+		},
+		{
+			Name: buildCloudInitVolumeDiskName(virtualMachineName),
+			VolumeSource: kubevirtapiv1.VolumeSource{
+				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
+					UserData: userData,
 				},
 			},
 		},
@@ -218,12 +242,24 @@ func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv
 	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
 		Requests: requests,
 	}
-	// TODO: get the machine type from machine.yaml
 	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: providerSpec.MachineType}
 	template.Spec.Domain.Devices = kubevirtapiv1.Devices{
 		Disks: []kubevirtapiv1.Disk{
 			{
 				Name: buildDataVolumeDiskName(virtualMachineName),
+				DiskDevice: kubevirtapiv1.DiskDevice{
+					Disk: &kubevirtapiv1.DiskTarget{
+						Bus: "virtio",
+					},
+				},
+			},
+			{
+				Name: buildCloudInitVolumeDiskName(virtualMachineName),
+				DiskDevice: kubevirtapiv1.DiskDevice{
+					Disk: &kubevirtapiv1.DiskTarget{
+						Bus: "virtio",
+					},
+				},
 			},
 		},
 	}
@@ -232,7 +268,7 @@ func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv
 }
 
 func buildBootVolumeName(virtualMachineName string) string {
-	return virtualMachineName + "-bootvolume"
+	return virtualMachineName + "-" + defaultBootVolumeDiskName
 }
 
 func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace string) *cdiv1.DataVolume {
@@ -278,7 +314,7 @@ func (s *machineScope) SyncMachineFromVm(vm *kubevirtapiv1.VirtualMachine, vmi *
 	// TODO this function need to be removed
 	klog.Infof("Updated machine %s", s.getMachineName())
 	if err := s.setProviderStatus(vm, vmi, conditionSuccess()); err != nil {
-		return machineapierros.InvalidMachineConfiguration("failed to set machine provider status: %v", err.Error())
+		return machinecontroller.InvalidMachineConfiguration("failed to set machine provider status: %v", err.Error())
 	}
 
 	return nil
@@ -291,7 +327,7 @@ func (s *machineScope) patchMachine() error {
 
 	providerStatus, err := kubevirtproviderv1.RawExtensionFromProviderStatus(s.machineProviderStatus)
 	if err != nil {
-		return machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
+		return machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 	s.machine.Status.ProviderStatus = providerStatus
 
