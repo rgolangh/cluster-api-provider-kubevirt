@@ -32,6 +32,7 @@ func initializeMachine(t *testing.T, mockKubevirtClient *mockkubevirtclient.Mock
 
 func TestCreate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	// TODO add excpect times per
 	cases := []struct {
 		name                   string
 		wantValidateMachineErr string
@@ -97,16 +98,11 @@ func TestCreate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
-			virtualMachine, err := machineScope.machineToVirtualMachine()
-			if err != nil {
-				t.Fatalf("Unable to build virtual machine with error: %v", err)
-			}
+
+			virtualMachine := stubVirtualMachine(machineScope)
 			vmi, _ := stubVmi(virtualMachine)
 
-			returnVM, err := machineScope.machineToVirtualMachine()
-			if err != nil {
-				t.Fatalf("Unable to build virtual machine with error: %v", err)
-			}
+			returnVM := stubVirtualMachine(machineScope)
 			returnVM.Status.Ready = tc.wantVMToBeReady
 
 			mockKubevirtClient.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateError).AnyTimes()
@@ -115,8 +111,7 @@ func TestCreate(t *testing.T) {
 			// TODO: test negative flow, return err != nil
 			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().UserDataSecret("worker-user-data", machine.Namespace).Return(stubSecret(), nil).AnyTimes()
-			//userDataSecret, getSecretErr := machineScope.kubernetesClient.UserDataSecret(secretName, machineScope.machine.GetNamespace())
+			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
 			err = providerVMInstance.Create(machine)
 			if tc.wantValidateMachineErr != "" {
@@ -223,10 +218,7 @@ func TestDelete(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
-			virtualMachine, err := machineScope.machineToVirtualMachine()
-			if err != nil {
-				t.Fatalf("Unable to build virtual machine with error: %v", err)
-			}
+			virtualMachine := stubVirtualMachine(machineScope)
 			vmi, _ := stubVmi(virtualMachine)
 
 			var returnVM *kubevirtapiv1.VirtualMachine
@@ -243,6 +235,7 @@ func TestDelete(t *testing.T) {
 			// TODO: test negative flow, return err != nil
 			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
 			err = providerVMInstance.Delete(machine)
@@ -317,10 +310,7 @@ func TestExists(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
-			virtualMachine, err := machineScope.machineToVirtualMachine()
-			if err != nil {
-				t.Fatalf("Unable to build virtual machine with error: %v", err)
-			}
+			virtualMachine := stubVirtualMachine(machineScope)
 			vmi, _ := stubVmi(virtualMachine)
 
 			var returnVM *kubevirtapiv1.VirtualMachine
@@ -331,6 +321,7 @@ func TestExists(t *testing.T) {
 			//kubevirt mocks
 			mockKubevirtClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
 			mockKubevirtClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
 			existsVM, err := providerVMInstance.Exists(machine)
@@ -450,26 +441,17 @@ func TestUpdate(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
-			virtualMachine, err := machineScope.machineToVirtualMachine()
-			if err != nil {
-				t.Fatalf("Unable to build virtual machine with error: %v", err)
-			}
+			virtualMachine := stubVirtualMachine(machineScope)
 			vmi, _ := stubVmi(virtualMachine)
 			var getReturnVM *kubevirtapiv1.VirtualMachine
 			if !tc.emptyGetVM {
-				returnVMResult, err := machineScope.machineToVirtualMachine()
-				if err != nil {
-					t.Fatalf("Unable to build virtual machine with error: %v", err)
-				}
+				returnVMResult := stubVirtualMachine(machineScope)
 				getReturnVM = returnVMResult
 				getReturnVM.Status.Ready = tc.wantVMToBeReady
 
 			}
 
-			updateReturnVM, err := machineScope.machineToVirtualMachine()
-			if err != nil {
-				t.Fatalf("Unable to build virtual machine with error: %v", err)
-			}
+			updateReturnVM := stubVirtualMachine(machineScope)
 
 			mockKubevirtClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetError).AnyTimes()
 			mockKubevirtClient.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
@@ -478,6 +460,7 @@ func TestUpdate(t *testing.T) {
 			// TODO: test negative flow, return err != nil
 			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
 			// TODO: test the bool wasUpdated
