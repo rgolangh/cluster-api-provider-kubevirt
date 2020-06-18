@@ -76,17 +76,17 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 	}
 
 	klog.Infof("Created Machine %v", machineScope.getMachineName())
-	vmi, err := m.getVMI(createdVM.Name, createdVM.Namespace, machineScope)
-	if err != nil {
-		klog.Errorf("%s: error getting vmi for machine: %v", machineScope.getMachineName(), err)
+
+	if err := m.syncMachine(createdVM, machineScope); err != nil {
+		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.getMachineName(), err)
+		return err
 	}
-	machineScope.SyncMachineFromVm(createdVM, vmi)
 
 	return m.requeueIfInstancePending(createdVM, machineScope.getMachineName())
 }
 
 // delete deletes machine
-func (m *manager) Delete(machine *machinev1.Machine) (resultErr error) {
+func (m *manager) Delete(machine *machinev1.Machine) error {
 	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
 	if err != nil {
 		return err
@@ -98,14 +98,6 @@ func (m *manager) Delete(machine *machinev1.Machine) (resultErr error) {
 	}
 
 	klog.Infof("%s: delete machine", machineScope.getMachineName())
-
-	defer func() {
-		// After the operation is done (success or failure)
-		// Update the machine object with the relevant changes
-		if err := machineScope.patchMachine(); err != nil {
-			resultErr = err
-		}
-	}()
 
 	existingVM, err := m.getVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
 	if err != nil {
@@ -127,7 +119,6 @@ func (m *manager) Delete(machine *machinev1.Machine) (resultErr error) {
 	if err := m.deleteVM(existingVM.GetName(), existingVM.GetNamespace(), machineScope); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
-	machineScope.SyncMachineFromVm(nil, nil)
 
 	klog.Infof("Deleted machine %v", machineScope.getMachineName())
 
@@ -182,28 +173,34 @@ func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr
 		return false, fmt.Errorf("failed to update VM: %w", err)
 	}
 	currentResourceVersion := updatedVM.ResourceVersion
-	wasUpdated = previousResourceVersion != currentResourceVersion
-	machineScope.setProviderID(updatedVM)
-
-	if err := machineScope.setMachineCloudProviderSpecifics(updatedVM); err != nil {
-		return wasUpdated, fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
-	}
 
 	klog.Infof("Updated machine %s", machineScope.getMachineName())
 
+	//Get an updatedVM with more details
 	getUpdatedVM, err := m.getVM(updatedVM.GetName(), updatedVM.GetNamespace(), machineScope)
 	if err != nil {
 		klog.Errorf("%s: error getting updated VM: %v", machineScope.getMachineName(), err)
 		getUpdatedVM = updatedVM
 	}
 
-	vmi, err := m.getVMI(getUpdatedVM.Name, getUpdatedVM.Namespace, machineScope)
+	if err := m.syncMachine(getUpdatedVM, machineScope); err != nil {
+		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.getMachineName(), err)
+		return false, err
+	}
+	wasUpdated = previousResourceVersion != currentResourceVersion
+	return wasUpdated, m.requeueIfInstancePending(getUpdatedVM, machineScope.getMachineName())
+}
+
+func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope *machineScope) error {
+	vmi, err := m.getVMI(vm.Name, vm.Namespace, machineScope)
 	if err != nil {
 		klog.Errorf("%s: error getting vmi for machine: %v", machineScope.getMachineName(), err)
 	}
-	machineScope.SyncMachineFromVm(getUpdatedVM, vmi)
-
-	return wasUpdated, m.requeueIfInstancePending(getUpdatedVM, machineScope.getMachineName())
+	if err := machineScope.SyncMachineFromVm(vm, vmi); err != nil {
+		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.getMachineName(), err)
+		return err
+	}
+	return nil
 }
 
 // exists returns true if machine exists.
@@ -213,14 +210,8 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 		return false, err
 	}
 
-	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
-	if err != nil {
-		return false, err
-	}
-
 	klog.Infof("%s: check if machine exists", machineScope.getMachineName())
-
-	existingVM, err := m.getVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
+	existingVM, err := m.getVM(machine.GetName(), getVMNamespace(machine), machineScope)
 	if err != nil {
 		// TODO ask Nir how to check it
 		if strings.Contains(err.Error(), "not found") {

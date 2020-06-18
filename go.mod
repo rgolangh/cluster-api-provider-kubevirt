@@ -12,6 +12,7 @@ require (
 	github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3
 	github.com/pborman/uuid v1.2.0
 	golang.org/x/crypto v0.0.0-20191205180655-e7c4368fe9dd // indirect
+	gopkg.in/inf.v0 v0.9.1
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.3
 	k8s.io/apiextensions-apiserver v0.18.0-rc.1

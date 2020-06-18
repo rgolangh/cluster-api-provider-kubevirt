@@ -3,6 +3,8 @@ package vm
 import (
 	"fmt"
 
+	apiresource "k8s.io/apimachinery/pkg/api/resource"
+
 	cdiv1 "kubevirt.io/containerized-data-importer/pkg/apis/core/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -79,18 +81,89 @@ func stubSecret() *corev1.Secret {
 	}
 	return &secret
 }
+func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
+	virtualMachineName := s.machine.GetName()
+
+	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
+
+	template.ObjectMeta = metav1.ObjectMeta{
+		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName},
+	}
+
+	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
+	template.Spec.Volumes = []kubevirtapiv1.Volume{
+		{
+			Name: buildDataVolumeDiskName(virtualMachineName),
+			VolumeSource: kubevirtapiv1.VolumeSource{
+				DataVolume: &kubevirtapiv1.DataVolumeSource{
+					Name: buildBootVolumeName(virtualMachineName),
+				},
+			},
+		},
+		{
+			Name: buildCloudInitVolumeDiskName(virtualMachineName),
+			VolumeSource: kubevirtapiv1.VolumeSource{
+				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
+					UserData: userDataValue,
+				},
+			},
+		},
+	}
+
+	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
+
+	requests := corev1.ResourceList{}
+
+	requestedMemory := s.machineProviderSpec.RequestedMemory
+	if requestedMemory == "" {
+		requestedMemory = defaultRequestedMemory
+	}
+	requests[corev1.ResourceMemory] = apiresource.MustParse(requestedMemory)
+
+	if s.machineProviderSpec.RequestedCPU != "" {
+		requests[corev1.ResourceCPU] = apiresource.MustParse(s.machineProviderSpec.RequestedCPU)
+	}
+
+	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
+		Requests: requests,
+	}
+	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: s.machineProviderSpec.MachineType}
+	template.Spec.Domain.Devices = kubevirtapiv1.Devices{
+		Disks: []kubevirtapiv1.Disk{
+			{
+				Name: buildDataVolumeDiskName(virtualMachineName),
+				DiskDevice: kubevirtapiv1.DiskDevice{
+					Disk: &kubevirtapiv1.DiskTarget{
+						Bus: defaultBus,
+					},
+				},
+			},
+			{
+				Name: buildCloudInitVolumeDiskName(virtualMachineName),
+				DiskDevice: kubevirtapiv1.DiskDevice{
+					Disk: &kubevirtapiv1.DiskTarget{
+						Bus: defaultBus,
+					},
+				},
+			},
+		},
+	}
+
+	return template
+}
 
 func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachine {
 	runAlways := kubevirtapiv1.RunStrategyAlways
 	namespace := machineScope.machine.Labels[machinev1.MachineClusterIDLabel]
-	userData := userDataValue
+	vmiTemplate := stubBuildVMITemplate(machineScope)
+
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
 				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, machineScope.machineProviderSpec.SourcePvcNamespace),
 			},
-			Template: buildVMITemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec, userData),
+			Template: vmiTemplate,
 		},
 		Status: machineScope.machineProviderStatus.VirtualMachineStatus,
 	}

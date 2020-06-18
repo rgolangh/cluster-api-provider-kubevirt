@@ -24,18 +24,21 @@ import (
 type machineState string
 
 const (
-	userDataSecretKey                              = "userData"
-	pvcRequestsStorage                             = "35Gi"
-	defaultRequestedMemory                         = "2048M"
-	defaultPersistentVolumeAccessMode              = corev1.ReadWriteOnce
-	defaultDataVolumeDiskName                      = "datavolumedisk1"
-	defaultCloudInitVolumeDiskName                 = "cloudinitdisk"
-	defaultBootVolumeDiskName                      = "bootvolume"
-	kubevirtIdAnnotationKey                        = "VmId"
-	vmNotCreated                      machineState = "vmNotCreated"
-	vmCreatedNotReady                 machineState = "vmWasCreatedButNotReady"
-	vmCreatedAndReady                 machineState = "vmWasCreatedButAndReady"
-	userDataKey                                    = "userData"
+	vmNotCreated      machineState = "vmNotCreated"
+	vmCreatedNotReady machineState = "vmWasCreatedButNotReady"
+	vmCreatedAndReady machineState = "vmWasCreatedButAndReady"
+)
+
+const (
+	pvcRequestsStorage                = "35Gi"
+	defaultRequestedMemory            = "2048M"
+	defaultPersistentVolumeAccessMode = corev1.ReadWriteOnce
+	defaultDataVolumeDiskName         = "datavolumedisk1"
+	defaultCloudInitVolumeDiskName    = "cloudinitdisk"
+	defaultBootVolumeDiskName         = "bootvolume"
+	kubevirtIdAnnotationKey           = "VmId"
+	userDataKey                       = "userData"
+	defaultBus                        = "virtio"
 )
 
 type machineScope struct {
@@ -76,34 +79,31 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclie
 		machineProviderStatus: providerStatus,
 	}, nil
 }
-
+func getVMNamespace(machine *machinev1.Machine) string {
+	namespace, ok := getClusterID(machine)
+	if !ok {
+		namespace = machine.Namespace
+	}
+	return namespace
+}
 func (s *machineScope) machineToVirtualMachine() (*kubevirtapiv1.VirtualMachine, error) {
 	runAlways := kubevirtapiv1.RunStrategyAlways
-	//running := true
 	// use getClusterID as a namespace
 	// TODO: if there isnt a cluster id - need to return an error
-	namespace, ok := getClusterID(s.machine)
-	if !ok {
-		namespace = s.machine.Namespace
+	namespace := getVMNamespace(s.machine)
+
+	vmiTemplate, err := s.buildVMITemplate(namespace)
+	if err != nil {
+		return nil, err
 	}
-	secretName := s.machineProviderSpec.IgnitionSecretName
-	userDataSecret, getSecretErr := s.kubernetesClient.UserDataSecret(secretName, s.machine.GetNamespace())
-	if getSecretErr != nil {
-		if apimachineryerrors.IsNotFound(getSecretErr) {
-			return nil, machinecontroller.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v not found", namespace, secretName, getSecretErr)
-		}
-		return nil, getSecretErr
-	}
-	userDataByte, ok := userDataSecret.Data[userDataKey]
-	userData := string(userDataByte)
+
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
-			//Running: &running,
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
 				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.SourcePvcNamespace),
 			},
-			Template: buildVMITemplate(s.machine.GetName(), s.machineProviderSpec, userData),
+			Template: vmiTemplate,
 		},
 		Status: s.machineProviderStatus.VirtualMachineStatus,
 	}
@@ -155,54 +155,33 @@ func (s *machineScope) updateAllowed() bool {
 	return s.machine.Spec.ProviderID != nil && *s.machine.Spec.ProviderID != "" && (s.machine.Status.LastUpdated == nil || s.machine.Status.LastUpdated.Add(requeueAfterSeconds*time.Second).After(time.Now()))
 }
 
-func (s *machineScope) setMachineCloudProviderSpecifics(vm *kubevirtapiv1.VirtualMachine) error {
-	if vm == nil {
-		return nil
-	}
-
-	if s.machine.Labels == nil {
-		s.machine.Labels = make(map[string]string)
-	}
-
-	if s.machine.Spec.Labels == nil {
-		s.machine.Spec.Labels = make(map[string]string)
-	}
-
-	if s.machine.Annotations == nil {
-		s.machine.Annotations = make(map[string]string)
-	}
-	vmId := vm.UID
-	vmType := vm.Spec.Template.Spec.Domain.Machine.Type
-	vmCreated := vm.Status.Created
-	vmReady := vm.Status.Ready
-
-	vmState := vmNotCreated
-	if vmCreated {
-		vmState = vmCreatedNotReady
-		if vmReady {
-			vmState = vmCreatedAndReady
-		}
-	}
-
-	s.machine.ObjectMeta.Annotations[kubevirtIdAnnotationKey] = string(vmId)
-	s.machine.Labels[machinecontroller.MachineInstanceTypeLabelName] = vmType
-	s.machine.Annotations[machinecontroller.MachineInstanceStateAnnotationName] = string(vmState)
-
-	return nil
-}
-
 func buildDataVolumeDiskName(virtualMachineName string) string {
-	return virtualMachineName + "-" + defaultDataVolumeDiskName
+	return buildVolumeName(virtualMachineName, defaultDataVolumeDiskName)
 }
 func buildCloudInitVolumeDiskName(virtualMachineName string) string {
-	return virtualMachineName + "-" + defaultCloudInitVolumeDiskName
+	return buildVolumeName(virtualMachineName, defaultCloudInitVolumeDiskName)
 }
 
-func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv1.KubevirtMachineProviderSpec, userData string) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
+func buildBootVolumeName(virtualMachineName string) string {
+	return buildVolumeName(virtualMachineName, defaultBootVolumeDiskName)
+}
+
+func buildVolumeName(virtualMachineName, suffixVolumeName string) string {
+	return fmt.Sprintf("%s-%s", virtualMachineName, suffixVolumeName)
+}
+
+func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.VirtualMachineInstanceTemplateSpec, error) {
+	virtualMachineName := s.machine.GetName()
+
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
 
 	template.ObjectMeta = metav1.ObjectMeta{
 		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName},
+	}
+
+	userData, err := s.getUserData(namespace)
+	if err != nil {
+		return nil, err
 	}
 
 	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
@@ -229,27 +208,27 @@ func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv
 
 	requests := corev1.ResourceList{}
 
-	requestedMemory := providerSpec.RequestedMemory
+	requestedMemory := s.machineProviderSpec.RequestedMemory
 	if requestedMemory == "" {
 		requestedMemory = defaultRequestedMemory
 	}
 	requests[corev1.ResourceMemory] = apiresource.MustParse(requestedMemory)
 
-	if providerSpec.RequestedCPU != "" {
-		requests[corev1.ResourceCPU] = apiresource.MustParse(providerSpec.RequestedCPU)
+	if s.machineProviderSpec.RequestedCPU != "" {
+		requests[corev1.ResourceCPU] = apiresource.MustParse(s.machineProviderSpec.RequestedCPU)
 	}
 
 	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
 		Requests: requests,
 	}
-	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: providerSpec.MachineType}
+	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: s.machineProviderSpec.MachineType}
 	template.Spec.Domain.Devices = kubevirtapiv1.Devices{
 		Disks: []kubevirtapiv1.Disk{
 			{
 				Name: buildDataVolumeDiskName(virtualMachineName),
 				DiskDevice: kubevirtapiv1.DiskDevice{
 					Disk: &kubevirtapiv1.DiskTarget{
-						Bus: "virtio",
+						Bus: defaultBus,
 					},
 				},
 			},
@@ -257,18 +236,31 @@ func buildVMITemplate(virtualMachineName string, providerSpec *kubevirtproviderv
 				Name: buildCloudInitVolumeDiskName(virtualMachineName),
 				DiskDevice: kubevirtapiv1.DiskDevice{
 					Disk: &kubevirtapiv1.DiskTarget{
-						Bus: "virtio",
+						Bus: defaultBus,
 					},
 				},
 			},
 		},
 	}
 
-	return template
+	return template, nil
 }
 
-func buildBootVolumeName(virtualMachineName string) string {
-	return virtualMachineName + "-" + defaultBootVolumeDiskName
+func (s *machineScope) getUserData(namespace string) (string, error) {
+	secretName := s.machineProviderSpec.IgnitionSecretName
+	userDataSecret, err := s.kubernetesClient.UserDataSecret(secretName, s.machine.GetNamespace())
+	if err != nil {
+		if apimachineryerrors.IsNotFound(err) {
+			return "", machinecontroller.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v not found", namespace, secretName, err)
+		}
+		return "", err
+	}
+	userDataByte, ok := userDataSecret.Data[userDataKey]
+	if !ok {
+		return "", machinecontroller.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
+	}
+	userData := string(userDataByte)
+	return userData, nil
 }
 
 func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace string) *cdiv1.DataVolume {
@@ -303,19 +295,50 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 }
 
 func (s *machineScope) SyncMachineFromVm(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance) error {
-	// TODO this function need to be removed
 	s.setProviderID(vm)
 
-	// TODO  this function need to be removed
-	if err := s.setMachineCloudProviderSpecifics(vm); err != nil {
+	if err := s.setMachineAnnotationsAndLabels(vm); err != nil {
 		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
 	}
 
-	// TODO this function need to be removed
-	klog.Infof("Updated machine %s", s.getMachineName())
 	if err := s.setProviderStatus(vm, vmi, conditionSuccess()); err != nil {
 		return machinecontroller.InvalidMachineConfiguration("failed to set machine provider status: %v", err.Error())
 	}
+
+	klog.Infof("Updated machine %s", s.getMachineName())
+	return nil
+}
+
+func (s *machineScope) setMachineAnnotationsAndLabels(vm *kubevirtapiv1.VirtualMachine) error {
+	if vm == nil {
+		return nil
+	}
+
+	if s.machine.Labels == nil {
+		s.machine.Labels = make(map[string]string)
+	}
+
+	if s.machine.Spec.Labels == nil {
+		s.machine.Spec.Labels = make(map[string]string)
+	}
+
+	if s.machine.Annotations == nil {
+		s.machine.Annotations = make(map[string]string)
+	}
+	vmId := vm.UID
+	vmType := vm.Spec.Template.Spec.Domain.Machine.Type
+
+	vmState := vmNotCreated
+	if vm.Status.Created {
+		vmState = vmCreatedNotReady
+		if vm.Status.Ready {
+			vmState = vmCreatedAndReady
+		}
+	}
+
+	s.machine.ObjectMeta.Annotations[kubevirtIdAnnotationKey] = string(vmId)
+	s.machine.Labels[machinecontroller.MachineInstanceTypeLabelName] = vmType
+	s.machine.Annotations[machinecontroller.MachineInstanceStateAnnotationName] = string(vmState)
 
 	return nil
 }
@@ -350,41 +373,41 @@ func (s *machineScope) patchMachine() error {
 }
 
 func machineProviderStatusFromVirtualMachine(virtualMachine *kubevirtapiv1.VirtualMachine) *kubevirtproviderv1.KubevirtMachineProviderStatus {
-	result := kubevirtproviderv1.KubevirtMachineProviderStatus{
+	return &kubevirtproviderv1.KubevirtMachineProviderStatus{
 		VirtualMachineStatus: virtualMachine.Status,
 		ResourceVersion:      virtualMachine.ResourceVersion,
 	}
-	return &result
 }
 
-// Is other field need to be updated?
-// Why in aws also update s.machine.Status.Addresses?
 func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance, condition kubevirtapiv1.VirtualMachineCondition) error {
+	if vm == nil {
+		klog.Infof("%s: couldn't calculate KubeVirt status - the provided vm is empty", s.machine.GetName())
+		return nil
+	}
 	klog.Infof("%s: Updating status", s.machine.GetName())
-
 	var networkAddresses []corev1.NodeAddress
+	s.machineProviderStatus = machineProviderStatusFromVirtualMachine(vm)
 
-	if vm != nil {
-		s.machineProviderStatus = machineProviderStatusFromVirtualMachine(vm)
-		//s.virtualMachine.Status = vm.Status
-		// update nodeAddresses
-		networkAddresses = append(networkAddresses, corev1.NodeAddress{Address: vm.Name, Type: corev1.NodeInternalDNS})
-		// Copy specific addresses - only node addresses
+	// update nodeAddresses
+	networkAddresses = append(networkAddresses, corev1.NodeAddress{Address: vm.Name, Type: corev1.NodeInternalDNS})
+
+	// VMI might be nil while the vm is in creating state but the vmi wasn't created yet.
+	//For example when colning the VM's dv
+	if vmi != nil {
+		// Copy specific addresses - only node addresses.
 		addresses, err := extractNodeAddresses(vmi)
 		if err != nil {
 			klog.Errorf("%s: Error extracting vm IP addresses: %v", s.machine.GetName(), err)
 			return err
 		}
-
 		networkAddresses = append(networkAddresses, addresses...)
-		klog.Infof("%s: finished calculating KubeVirt status", s.machine.GetName())
-	} else {
-		klog.Infof("%s: couldn't calculate KubeVirt status - the provided vm is empty", s.machine.GetName())
 	}
 
+	klog.Infof("%s: finished calculating KubeVirt status", s.machine.GetName())
+
 	s.machine.Status.Addresses = networkAddresses
-	// TODO: update it
-	//s.virtualMachine.Status.Conditions = setKubevirtMachineProviderCondition(condition, s.virtualMachine.Status.Conditions)
+	// TODO: update the phase of the machine
+	//s.machine.Status.Phase = setKubevirtMachineProviderCondition(condition, vm.Status.Conditions)
 
 	return nil
 }

@@ -31,7 +31,7 @@ func initializeMachine(t *testing.T, mockKubevirtClient *mockkubevirtclient.Mock
 }
 
 func TestCreate(t *testing.T) {
-	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	// TODO add excpect times per
 	cases := []struct {
 		name                   string
@@ -129,7 +129,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
 		name                   string
 		wantValidateMachineErr string
@@ -255,7 +255,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestExists(t *testing.T) {
-	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
 		name           string
 		clientGetError error
@@ -341,7 +341,7 @@ func TestExists(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	// TODO add a case of setProviderID and setMachineCloudProviderSpecifics failure
+	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
 		name                   string
 		wantValidateMachineErr string
