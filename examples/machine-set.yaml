@@ -2,21 +2,21 @@
 apiVersion: machine.openshift.io/v1beta1
 kind: MachineSet
 metadata:
-  name: aws-actuator-testing-machine
+  name: kubevirt-actuator-testing-machine
   namespace: default
   labels:
-    machine.openshift.io/cluster-api-cluster: aws-actuator-k8s
+    machine.openshift.io/cluster-api-cluster: kubevirt-actuator-k8s
 spec:
   replicas: 2
   selector:
     matchLabels:
       machine.openshift.io/cluster-api-machineset: test-master
-      machine.openshift.io/cluster-api-cluster: aws-actuator-k8s
+      machine.openshift.io/cluster-api-cluster: kubevirt-actuator-k8s
   template:
     metadata:
       labels:
         machine.openshift.io/cluster-api-machineset: test-master
-        machine.openshift.io/cluster-api-cluster: aws-actuator-k8s
+        machine.openshift.io/cluster-api-cluster: kubevirt-actuator-k8s
     spec:
       metadata:
         labels:
@@ -24,8 +24,8 @@ spec:
           node-role.kubernetes.io/infra: ""
       providerSpec:
         value:
-          apiVersion: awsproviderconfig.openshift.io/v1beta1
-          kind: AWSMachineProviderConfig
+          apiVersion: Kubevirtproviderconfig.openshift.io/v1beta1
+          kind: KubevirtMachineProviderConfig
           ami:
             filters:
             - name: "image_stage"
@@ -38,7 +38,7 @@ spec:
               values:
               - "yes"
           credentialsSecret:
-            name: aws-credentials-secret
+            name: kubevirt-credentials-secret
           instanceType: m4.xlarge
           placement:
             region: us-east-1
@@ -47,7 +47,7 @@ spec:
             filters:
             - name: "tag:Name"
               values:
-              - "aws-actuator-k8s-worker-*"
+              - "kubevirt-actuator-k8s-worker-*"
           iamInstanceProfile:
             id: openshift_master_launch_instances
           keyName: libra
@@ -55,5 +55,5 @@ spec:
           - filters:
             - name: "tag:Name"
               values:
-              - "aws-actuator-k8s-*"
+              - "kubevirt-actuator-k8s-*"
           publicIP: true

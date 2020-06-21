@@ -34,7 +34,7 @@ const (
 	UnderKubeConfig = "kubeconfig"
 )
 
-// ClientBuilderFuncType is function type for building aws client
+// ClientBuilderFuncType is function type for building kubevirt client
 type ClientBuilderFuncType func(kubernetesClient kubernetesclient.Client, secretName, namespace string) (Client, error)
 
 // Client is a wrapper object for actual kubevirt clients: virtctl and the kubecli
