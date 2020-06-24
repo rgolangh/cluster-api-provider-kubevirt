@@ -32,28 +32,43 @@ func TestCreate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	// TODO add excpect times per
 	cases := []struct {
-		name                   string
-		wantValidateMachineErr string
-		wantCreateErr          string
-		ClientCreateError      error
-		labels                 map[string]string
-		providerID             string
-		wantVMToBeReady        bool
+		name                     string
+		wantValidateMachineErr   string
+		wantCreateVMErr          string
+		wantCreateServiceErr     string
+		ClientCreateVMError      error
+		ClientCreateServiceError error
+		labels                   map[string]string
+		providerID               string
+		wantVMToBeReady          bool
 	}{
 		{
-			name:                   "Create a VM",
-			wantValidateMachineErr: "",
-			wantCreateErr:          "",
-			ClientCreateError:      nil,
-			labels:                 nil,
-			providerID:             "",
-			wantVMToBeReady:        true,
+			name:                     "Create a VM",
+			wantValidateMachineErr:   "",
+			wantCreateVMErr:          "",
+			ClientCreateVMError:      nil,
+			labels:                   nil,
+			providerID:               "",
+			wantVMToBeReady:          true,
+			wantCreateServiceErr:     "",
+			ClientCreateServiceError: nil,
+		},
+		{
+			name:                     "Create a VM but fail on create a sevice",
+			wantValidateMachineErr:   "",
+			wantCreateVMErr:          "",
+			ClientCreateVMError:      nil,
+			labels:                   nil,
+			providerID:               "",
+			wantVMToBeReady:          true,
+			wantCreateServiceErr:     "failed to create service: client error",
+			ClientCreateServiceError: errors.New("client error"),
 		},
 		{
 			name:                   "Create a VM not ready and fail",
 			wantValidateMachineErr: "",
-			wantCreateErr:          "",
-			ClientCreateError:      nil,
+			wantCreateVMErr:        "",
+			ClientCreateVMError:    nil,
 			labels:                 nil,
 			providerID:             "",
 			wantVMToBeReady:        false,
@@ -61,8 +76,8 @@ func TestCreate(t *testing.T) {
 		{
 			name:                   "Create a VM from unlabeled machine and fail",
 			wantValidateMachineErr: fmt.Sprintf("%s: failed validating machine provider spec: %v: missing %q label", mahcineName, mahcineName, machinev1.MachineClusterIDLabel),
-			wantCreateErr:          "",
-			ClientCreateError:      nil,
+			wantCreateVMErr:        "",
+			ClientCreateVMError:    nil,
 			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
 			providerID:             "",
 			wantVMToBeReady:        true,
@@ -70,8 +85,8 @@ func TestCreate(t *testing.T) {
 		{
 			name:                   "Create a VM with an error in the client-go and fail",
 			wantValidateMachineErr: "",
-			wantCreateErr:          "failed to create virtual machine: client error",
-			ClientCreateError:      errors.New("client error"),
+			wantCreateVMErr:        "failed to create virtual machine: client error",
+			ClientCreateVMError:    errors.New("client error"),
 			labels:                 nil,
 			providerID:             "",
 			wantVMToBeReady:        true,
@@ -103,19 +118,28 @@ func TestCreate(t *testing.T) {
 			returnVM := stubVirtualMachine(machineScope)
 			returnVM.Status.Ready = tc.wantVMToBeReady
 
-			mockUnderkube.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateError).AnyTimes()
+			// TODO: test negative flow, return err != nil
+			mockUnderkube.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
-			// TODO: test negative flow, return err != nil
+			if tc.wantCreateServiceErr == "" {
+				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(stubService(virtualMachine.Name), nil).AnyTimes()
+			} else {
+				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(nil, tc.ClientCreateServiceError).AnyTimes()
+			}
+
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+
 			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			err = providerVMInstance.Create(machine)
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, err.Error())
-			} else if tc.wantCreateErr != "" {
-				assert.Equal(t, tc.wantCreateErr, err.Error())
+			} else if tc.wantCreateVMErr != "" {
+				assert.Equal(t, tc.wantCreateVMErr, err.Error())
+			} else if tc.wantCreateServiceErr != "" {
+				assert.Equal(t, tc.wantCreateServiceErr, err.Error())
 			} else if !tc.wantVMToBeReady {
 				assert.Equal(t, err.Error(), "requeue in: 20s")
 			} else {
@@ -129,34 +153,72 @@ func TestCreate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
-		name                   string
-		wantValidateMachineErr string
-		wantGetErr             string
-		wantDeleteErr          string
-		clientGetError         error
-		clientDeleteError      error
-		emptyGetVM             bool
-		labels                 map[string]string
-		providerID             string
+		name                     string
+		wantValidateMachineErr   string
+		wantGetVMErr             string
+		wantDeleteVMErr          string
+		wantGetServiceErr        string
+		wantDeleteServiceErr     string
+		clientGetVMError         error
+		clientDeleteVMError      error
+		ClientDeleteServiceError error
+		ClientGetServiceError    error
+		emptyGetVM               bool
+		labels                   map[string]string
+		providerID               string
 	}{
+		//{
+		//	name:                     "Delete a VM successfully",
+		//	wantValidateMachineErr:   "",
+		//	wantGetVMErr:             "",
+		//	clientGetVMError:         nil,
+		//	wantDeleteVMErr:          "",
+		//	clientDeleteVMError:      nil,
+		//	emptyGetVM:               false,
+		//	labels:                   nil,
+		//	providerID:               "",
+		//	wantDeleteServiceErr:     "",
+		//	wantGetServiceErr:        "",
+		//	ClientDeleteServiceError: nil,
+		//	ClientGetServiceError:    nil,
+		//},
 		{
-			name:                   "Delete a VM successfully",
-			wantValidateMachineErr: "",
-			wantGetErr:             "",
-			clientGetError:         nil,
-			wantDeleteErr:          "",
-			clientDeleteError:      nil,
-			emptyGetVM:             false,
-			labels:                 nil,
-			providerID:             "",
+			name:                     "Delete a VM successfully but fail on get service",
+			wantValidateMachineErr:   "",
+			wantGetVMErr:             "",
+			clientGetVMError:         nil,
+			wantDeleteVMErr:          "",
+			clientDeleteVMError:      nil,
+			emptyGetVM:               false,
+			labels:                   nil,
+			providerID:               "",
+			wantDeleteServiceErr:     "",
+			wantGetServiceErr:        "failed to delete the service of VM: client error",
+			ClientDeleteServiceError: nil,
+			ClientGetServiceError:    errors.New("client error"),
+		},
+		{
+			name:                     "Delete a VM successfully but fail on delete service",
+			wantValidateMachineErr:   "",
+			wantGetVMErr:             "",
+			clientGetVMError:         nil,
+			wantDeleteVMErr:          "",
+			clientDeleteVMError:      nil,
+			emptyGetVM:               false,
+			labels:                   nil,
+			providerID:               "",
+			wantDeleteServiceErr:     "failed to delete the service of VM: client error",
+			wantGetServiceErr:        "",
+			ClientDeleteServiceError: errors.New("client error"),
+			ClientGetServiceError:    nil,
 		},
 		{
 			name:                   "Delete a VM from unlabeled machine and fail",
 			wantValidateMachineErr: fmt.Sprintf("%s: failed validating machine provider spec: %v: missing %q label", mahcineName, mahcineName, machinev1.MachineClusterIDLabel),
-			wantGetErr:             "",
-			clientGetError:         nil,
-			wantDeleteErr:          "",
-			clientDeleteError:      nil,
+			wantGetVMErr:           "",
+			clientGetVMError:       nil,
+			wantDeleteVMErr:        "",
+			clientDeleteVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
 			providerID:             "",
@@ -164,10 +226,10 @@ func TestDelete(t *testing.T) {
 		{
 			name:                   "Delete deleting VM with getting error and fail",
 			wantValidateMachineErr: "",
-			wantGetErr:             "client error",
-			clientGetError:         errors.New("client error"),
-			wantDeleteErr:          "",
-			clientDeleteError:      nil,
+			wantGetVMErr:           "client error",
+			clientGetVMError:       errors.New("client error"),
+			wantDeleteVMErr:        "",
+			clientDeleteVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             "",
@@ -175,10 +237,10 @@ func TestDelete(t *testing.T) {
 		{
 			name:                   "Delete a nonexistent VM and fail",
 			wantValidateMachineErr: "",
-			wantGetErr:             "",
-			clientGetError:         nil,
-			wantDeleteErr:          "",
-			clientDeleteError:      nil,
+			wantGetVMErr:           "",
+			clientGetVMError:       nil,
+			wantDeleteVMErr:        "",
+			clientDeleteVMError:    nil,
 			emptyGetVM:             true,
 			labels:                 nil,
 			providerID:             "",
@@ -186,10 +248,10 @@ func TestDelete(t *testing.T) {
 		{
 			name:                   "Delete a VM with an error in the client-go and fail",
 			wantValidateMachineErr: "",
-			wantGetErr:             "",
-			clientGetError:         nil,
-			wantDeleteErr:          "failed to delete VM: client error",
-			clientDeleteError:      errors.New("client error"),
+			wantGetVMErr:           "",
+			clientGetVMError:       nil,
+			wantDeleteVMErr:        "failed to delete VM: client error",
+			clientDeleteVMError:    errors.New("client error"),
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             "",
@@ -225,9 +287,20 @@ func TestDelete(t *testing.T) {
 			}
 
 			//underkube mocks
-			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
-			mockUnderkube.EXPECT().DeleteVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteError).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetVMError).AnyTimes()
+			mockUnderkube.EXPECT().DeleteVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+
+			if tc.wantGetServiceErr == "" {
+				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
+			} else {
+				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(nil, tc.ClientGetServiceError).AnyTimes()
+			}
+			if tc.wantDeleteServiceErr == "" {
+				mockUnderkube.EXPECT().DeleteService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(nil).AnyTimes()
+			} else {
+				mockUnderkube.EXPECT().DeleteService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(tc.ClientDeleteServiceError).AnyTimes()
+			}
 
 			//overkube mocks
 			// TODO: test negative flow, return err != nil
@@ -238,12 +311,18 @@ func TestDelete(t *testing.T) {
 			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			err = providerVMInstance.Delete(machine)
 
+			// getServicErr
+			// deleteServiceErr
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, err.Error())
-			} else if tc.wantGetErr != "" {
-				assert.Equal(t, tc.wantGetErr, err.Error())
-			} else if tc.wantDeleteErr != "" {
-				assert.Equal(t, tc.wantDeleteErr, err.Error())
+			} else if tc.wantGetVMErr != "" {
+				assert.Equal(t, tc.wantGetVMErr, err.Error())
+			} else if tc.wantDeleteVMErr != "" {
+				assert.Equal(t, tc.wantDeleteVMErr, err.Error())
+			} else if tc.wantGetServiceErr != "" {
+				assert.Equal(t, tc.wantGetServiceErr, err.Error())
+			} else if tc.wantDeleteServiceErr != "" {
+				assert.Equal(t, tc.wantDeleteServiceErr, err.Error())
 			} else {
 				assert.Equal(t, err, nil)
 			}
@@ -341,33 +420,68 @@ func TestExists(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
-		name                   string
-		wantValidateMachineErr string
-		wantUpdateErr          string
-		clientGetError         error
-		clientUpdateError      error
-		emptyGetVM             bool
-		labels                 map[string]string
-		providerID             string
-		wantVMToBeReady        bool
+		name                     string
+		wantValidateMachineErr   string
+		wantUpdateVMErr          string
+		wantCreateServiceErr     string
+		wantGetServiceErr        string
+		clientGetVMError         error
+		clientUpdateVMError      error
+		clientCreateServiceError error
+		clientGetServiceError    error
+		emptyGetVM               bool
+		labels                   map[string]string
+		providerID               string
+		wantVMToBeReady          bool
 	}{
 		{
-			name:                   "Update a VM",
+			name:                   "Update a VM and create a service",
 			wantValidateMachineErr: "",
-			wantUpdateErr:          "",
-			clientGetError:         nil,
-			clientUpdateError:      nil,
+			wantUpdateVMErr:        "",
+			clientGetVMError:       nil,
+			clientUpdateVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
 			wantVMToBeReady:        true,
+			wantGetServiceErr:      "service not found",
+			clientGetServiceError:  errors.New("service not found"),
 		},
+		{
+			name:                   "Update a VM but fail on get service",
+			wantValidateMachineErr: "",
+			wantUpdateVMErr:        "",
+			clientGetVMError:       nil,
+			clientUpdateVMError:    nil,
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
+			wantVMToBeReady:        true,
+			wantGetServiceErr:      "machine-test: error getting service of VM: client error",
+			clientGetServiceError:  errors.New("client error"),
+		},
+		{
+			name:                     "Update a VM but fail on create service",
+			wantValidateMachineErr:   "",
+			wantUpdateVMErr:          "",
+			clientGetVMError:         nil,
+			clientUpdateVMError:      nil,
+			emptyGetVM:               false,
+			labels:                   nil,
+			providerID:               fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
+			wantVMToBeReady:          true,
+			wantCreateServiceErr:     "failed to create service: client error",
+			clientCreateServiceError: errors.New("client error"),
+			wantGetServiceErr:        "service not found",
+			clientGetServiceError:    errors.New("service not found"),
+		},
+
 		{
 			name:                   "Update a VM that never be ready",
 			wantValidateMachineErr: "",
-			wantUpdateErr:          "",
-			clientGetError:         nil,
-			clientUpdateError:      nil,
+			wantUpdateVMErr:        "",
+			clientGetVMError:       nil,
+			clientUpdateVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             "",
@@ -376,9 +490,9 @@ func TestUpdate(t *testing.T) {
 		{
 			name:                   "Update a VM from unlabeled machine and fail",
 			wantValidateMachineErr: fmt.Sprintf("%s: failed validating machine provider spec: %v: missing %q label", mahcineName, mahcineName, machinev1.MachineClusterIDLabel),
-			wantUpdateErr:          "",
-			clientGetError:         nil,
-			clientUpdateError:      nil,
+			wantUpdateVMErr:        "",
+			clientGetVMError:       nil,
+			clientUpdateVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 map[string]string{machinev1.MachineClusterIDLabel: ""},
 			providerID:             "",
@@ -387,9 +501,9 @@ func TestUpdate(t *testing.T) {
 		{
 			name:                   "Update a VM with getting error and fail",
 			wantValidateMachineErr: "",
-			wantUpdateErr:          "",
-			clientGetError:         errors.New("client error"),
-			clientUpdateError:      nil,
+			wantUpdateVMErr:        "",
+			clientGetVMError:       errors.New("client error"),
+			clientUpdateVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             "",
@@ -398,9 +512,9 @@ func TestUpdate(t *testing.T) {
 		{
 			name:                   "Update a nonexistent VM and fail",
 			wantValidateMachineErr: "",
-			wantUpdateErr:          "",
-			clientGetError:         nil,
-			clientUpdateError:      nil,
+			wantUpdateVMErr:        "",
+			clientGetVMError:       nil,
+			clientUpdateVMError:    nil,
 			emptyGetVM:             true,
 			labels:                 nil,
 			providerID:             "",
@@ -409,9 +523,9 @@ func TestUpdate(t *testing.T) {
 		{
 			name:                   "Delete a VM with an error in the client-go and fail",
 			wantValidateMachineErr: "",
-			clientGetError:         nil,
-			clientUpdateError:      errors.New("client error"),
-			wantUpdateErr:          "failed to update VM: client error",
+			clientGetVMError:       nil,
+			clientUpdateVMError:    errors.New("client error"),
+			wantUpdateVMErr:        "failed to update VM: client error",
 			emptyGetVM:             false,
 			labels:                 nil,
 			providerID:             "",
@@ -451,10 +565,23 @@ func TestUpdate(t *testing.T) {
 
 			updateReturnVM := stubVirtualMachine(machineScope)
 
-			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetError).AnyTimes()
-			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
-			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetVMError).AnyTimes()
+			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
+			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+
+			if tc.wantGetServiceErr == "" {
+				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
+			} else {
+				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(nil, tc.clientGetServiceError).AnyTimes()
+			}
+			if tc.wantCreateServiceErr == "" {
+				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(stubService(virtualMachine.Name), nil).AnyTimes()
+
+			} else {
+				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(nil, tc.clientCreateServiceError).AnyTimes()
+			}
+
 			// TODO: test negative flow, return err != nil
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
@@ -466,14 +593,18 @@ func TestUpdate(t *testing.T) {
 
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, err.Error())
-			} else if tc.clientGetError != nil {
-				assert.Equal(t, tc.clientGetError.Error(), err.Error())
-			} else if tc.wantUpdateErr != "" {
-				assert.Equal(t, tc.wantUpdateErr, err.Error())
+			} else if tc.clientGetVMError != nil {
+				assert.Equal(t, tc.clientGetVMError.Error(), err.Error())
+			} else if tc.wantUpdateVMErr != "" {
+				assert.Equal(t, tc.wantUpdateVMErr, err.Error())
 			} else if tc.emptyGetVM {
 				assert.Equal(t, err.Error(), "requeue in: 3m0s")
 			} else if !tc.wantVMToBeReady {
 				assert.Equal(t, err.Error(), "requeue in: 20s")
+			} else if tc.wantCreateServiceErr != "" {
+				assert.Equal(t, tc.wantCreateServiceErr, err.Error())
+			} else if tc.wantGetServiceErr != "" && tc.wantGetServiceErr != "service not found" {
+				assert.Equal(t, tc.wantGetServiceErr, err.Error())
 			} else {
 				assert.Equal(t, err, nil)
 				//providerID := fmt.Sprintf("kubevirt:///%s/%s", machineScope.machine.GetNamespace(), machineScope.virtualMachine.GetName())

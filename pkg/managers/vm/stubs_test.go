@@ -47,6 +47,15 @@ func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineIns
 	return &vmi, nil
 }
 
+func stubService(vmName string) *corev1.Service {
+	service := &corev1.Service{}
+	service.Name = fmt.Sprint(servicePrefixName, vmName)
+	service.Spec = corev1.ServiceSpec{
+		ClusterIP: "",
+		Selector:  map[string]string{"name": "worker-" + vmName},
+	}
+	return service
+}
 func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
 	providerSpec, err := kubevirtproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {

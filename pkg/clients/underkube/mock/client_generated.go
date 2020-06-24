@@ -188,30 +188,60 @@ func (mr *MockClientMockRecorder) StopVirtualMachine(namespace, name interface{}
 }
 
 // CreateService mocks base method
-func (m *MockClient) CreateService(vmName, namespace string) (*v1.Service, error) {
+func (m *MockClient) CreateService(service *v1.Service, namespace string) (*v1.Service, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateService", vmName, namespace)
+	ret := m.ctrl.Call(m, "CreateService", service, namespace)
 	ret0, _ := ret[0].(*v1.Service)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateService indicates an expected call of CreateService
-func (mr *MockClientMockRecorder) CreateService(vmName, namespace interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) CreateService(service, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateService", reflect.TypeOf((*MockClient)(nil).CreateService), vmName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateService", reflect.TypeOf((*MockClient)(nil).CreateService), service, namespace)
 }
 
 // DeleteService mocks base method
-func (m *MockClient) DeleteService(vmName, namespace string, options *v10.DeleteOptions) error {
+func (m *MockClient) DeleteService(serviceName, namespace string, options *v10.DeleteOptions) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteService", vmName, namespace, options)
+	ret := m.ctrl.Call(m, "DeleteService", serviceName, namespace, options)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteService indicates an expected call of DeleteService
-func (mr *MockClientMockRecorder) DeleteService(vmName, namespace, options interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) DeleteService(serviceName, namespace, options interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteService", reflect.TypeOf((*MockClient)(nil).DeleteService), vmName, namespace, options)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteService", reflect.TypeOf((*MockClient)(nil).DeleteService), serviceName, namespace, options)
+}
+
+// UpdateService mocks base method
+func (m *MockClient) UpdateService(service *v1.Service, namespace string) (*v1.Service, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateService", service, namespace)
+	ret0, _ := ret[0].(*v1.Service)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateService indicates an expected call of UpdateService
+func (mr *MockClientMockRecorder) UpdateService(service, namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateService", reflect.TypeOf((*MockClient)(nil).UpdateService), service, namespace)
+}
+
+// GetService mocks base method
+func (m *MockClient) GetService(serviceName, namespace string, options v10.GetOptions) (*v1.Service, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetService", serviceName, namespace, options)
+	ret0, _ := ret[0].(*v1.Service)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetService indicates an expected call of GetService
+func (mr *MockClientMockRecorder) GetService(serviceName, namespace, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetService", reflect.TypeOf((*MockClient)(nil).GetService), serviceName, namespace, options)
 }
