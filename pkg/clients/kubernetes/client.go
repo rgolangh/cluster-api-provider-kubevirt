@@ -20,7 +20,7 @@ import (
 	"context"
 
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,7 +33,7 @@ import (
 type Client interface {
 	PatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
 	StatusPatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
-	UserDataSecret(secretName string, namespace string) (*v1.Secret, error)
+	UserDataSecret(secretName string, namespace string) (*corev1.Secret, error)
 }
 
 type kubeClient struct {
@@ -62,6 +62,6 @@ func (c *kubeClient) StatusPatchMachine(machine *machinev1.Machine, originMachin
 	return c.runtimeClient.Status().Patch(context.Background(), machine, client.MergeFrom(originMachineCopy))
 }
 
-func (c *kubeClient) UserDataSecret(secretName string, namespace string) (*v1.Secret, error) {
+func (c *kubeClient) UserDataSecret(secretName string, namespace string) (*corev1.Secret, error) {
 	return c.kubernetesClient.CoreV1().Secrets(namespace).Get(secretName, k8smetav1.GetOptions{})
 }

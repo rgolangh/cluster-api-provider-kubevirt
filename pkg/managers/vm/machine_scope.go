@@ -198,6 +198,9 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
+					//UserDataSecretRef: &corev1.LocalObjectReference{
+					//	Name: "worker-cnv-user-data",
+					//},
 					UserData: userData,
 				},
 			},
