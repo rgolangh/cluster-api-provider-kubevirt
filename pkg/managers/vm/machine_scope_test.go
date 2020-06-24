@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-const testNamespace = "kubevirt-test"
+const testNamespace = "underkube-test"
 
 func TestGetUserData(t *testing.T) {
 

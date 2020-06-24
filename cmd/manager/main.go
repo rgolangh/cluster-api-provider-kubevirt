@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuator"
-	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/managers/vm"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
@@ -44,7 +44,7 @@ func main() {
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 
-	log := logf.Log.WithName("kubevirt-controller-manager")
+	log := logf.Log.WithName("underkube-controller-manager")
 	logf.SetLogger(logf.ZapLogger(false))
 	entryLog := log.WithName("entrypoint")
 
@@ -78,15 +78,14 @@ func main() {
 		klog.Fatalf("Error setting up scheme: %v", err)
 	}
 
-	// Initialize overKube kubernetes client
-	// TODO Consider change the kubernetesclient name (overkubeclient / runtimeclient)
-	kubernetesClient, err := kubernetesclient.New(mgr)
+	// Initialize overkube clients
+	kubernetesClient, err := overkube.New(mgr)
 	if err != nil {
-		entryLog.Error(err, "Failed to create kubernetes client from configuration")
+		entryLog.Error(err, "Failed to create overkube client from configuration")
 	}
 
 	// Initialize provider vm manager
-	providerVM := vm.New(kubevirtclient.New, kubernetesClient)
+	providerVM := vm.New(underkube.New, kubernetesClient)
 
 	// Initialize machine actuator.
 	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("kubevirtcontroller"))

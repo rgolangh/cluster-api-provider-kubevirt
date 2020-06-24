@@ -6,9 +6,10 @@ package mock
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/api/core/v1"
+	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
-	v10 "kubevirt.io/client-go/api/v1"
+	v11 "kubevirt.io/client-go/api/v1"
 	reflect "reflect"
 )
 
@@ -36,10 +37,10 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // CreateVirtualMachine mocks base method
-func (m *MockClient) CreateVirtualMachine(namespace string, newVM *v10.VirtualMachine) (*v10.VirtualMachine, error) {
+func (m *MockClient) CreateVirtualMachine(namespace string, newVM *v11.VirtualMachine) (*v11.VirtualMachine, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateVirtualMachine", namespace, newVM)
-	ret0, _ := ret[0].(*v10.VirtualMachine)
+	ret0, _ := ret[0].(*v11.VirtualMachine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -51,7 +52,7 @@ func (mr *MockClientMockRecorder) CreateVirtualMachine(namespace, newVM interfac
 }
 
 // DeleteVirtualMachine mocks base method
-func (m *MockClient) DeleteVirtualMachine(namespace, name string, options *v1.DeleteOptions) error {
+func (m *MockClient) DeleteVirtualMachine(namespace, name string, options *v10.DeleteOptions) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteVirtualMachine", namespace, name, options)
 	ret0, _ := ret[0].(error)
@@ -65,10 +66,10 @@ func (mr *MockClientMockRecorder) DeleteVirtualMachine(namespace, name, options 
 }
 
 // GetVirtualMachine mocks base method
-func (m *MockClient) GetVirtualMachine(namespace, name string, options *v1.GetOptions) (*v10.VirtualMachine, error) {
+func (m *MockClient) GetVirtualMachine(namespace, name string, options *v10.GetOptions) (*v11.VirtualMachine, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetVirtualMachine", namespace, name, options)
-	ret0, _ := ret[0].(*v10.VirtualMachine)
+	ret0, _ := ret[0].(*v11.VirtualMachine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -80,10 +81,10 @@ func (mr *MockClientMockRecorder) GetVirtualMachine(namespace, name, options int
 }
 
 // GetVirtualMachineInstance mocks base method
-func (m *MockClient) GetVirtualMachineInstance(namespace, name string, options *v1.GetOptions) (*v10.VirtualMachineInstance, error) {
+func (m *MockClient) GetVirtualMachineInstance(namespace, name string, options *v10.GetOptions) (*v11.VirtualMachineInstance, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetVirtualMachineInstance", namespace, name, options)
-	ret0, _ := ret[0].(*v10.VirtualMachineInstance)
+	ret0, _ := ret[0].(*v11.VirtualMachineInstance)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -95,10 +96,10 @@ func (mr *MockClientMockRecorder) GetVirtualMachineInstance(namespace, name, opt
 }
 
 // ListVirtualMachine mocks base method
-func (m *MockClient) ListVirtualMachine(namespace string, options *v1.ListOptions) (*v10.VirtualMachineList, error) {
+func (m *MockClient) ListVirtualMachine(namespace string, options *v10.ListOptions) (*v11.VirtualMachineList, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListVirtualMachine", namespace, options)
-	ret0, _ := ret[0].(*v10.VirtualMachineList)
+	ret0, _ := ret[0].(*v11.VirtualMachineList)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -110,10 +111,10 @@ func (mr *MockClientMockRecorder) ListVirtualMachine(namespace, options interfac
 }
 
 // UpdateVirtualMachine mocks base method
-func (m *MockClient) UpdateVirtualMachine(namespace string, vm *v10.VirtualMachine) (*v10.VirtualMachine, error) {
+func (m *MockClient) UpdateVirtualMachine(namespace string, vm *v11.VirtualMachine) (*v11.VirtualMachine, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateVirtualMachine", namespace, vm)
-	ret0, _ := ret[0].(*v10.VirtualMachine)
+	ret0, _ := ret[0].(*v11.VirtualMachine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -125,14 +126,14 @@ func (mr *MockClientMockRecorder) UpdateVirtualMachine(namespace, vm interface{}
 }
 
 // PatchVirtualMachine mocks base method
-func (m *MockClient) PatchVirtualMachine(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (*v10.VirtualMachine, error) {
+func (m *MockClient) PatchVirtualMachine(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (*v11.VirtualMachine, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{namespace, name, pt, data}
 	for _, a := range subresources {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "PatchVirtualMachine", varargs...)
-	ret0, _ := ret[0].(*v10.VirtualMachine)
+	ret0, _ := ret[0].(*v11.VirtualMachine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -184,4 +185,33 @@ func (m *MockClient) StopVirtualMachine(namespace, name string) error {
 func (mr *MockClientMockRecorder) StopVirtualMachine(namespace, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopVirtualMachine", reflect.TypeOf((*MockClient)(nil).StopVirtualMachine), namespace, name)
+}
+
+// CreateService mocks base method
+func (m *MockClient) CreateService(vmName, namespace string) (*v1.Service, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateService", vmName, namespace)
+	ret0, _ := ret[0].(*v1.Service)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateService indicates an expected call of CreateService
+func (mr *MockClientMockRecorder) CreateService(vmName, namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateService", reflect.TypeOf((*MockClient)(nil).CreateService), vmName, namespace)
+}
+
+// DeleteService mocks base method
+func (m *MockClient) DeleteService(vmName, namespace string, options *v10.DeleteOptions) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteService", vmName, namespace, options)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteService indicates an expected call of DeleteService
+func (mr *MockClientMockRecorder) DeleteService(vmName, namespace, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteService", reflect.TypeOf((*MockClient)(nil).DeleteService), vmName, namespace, options)
 }

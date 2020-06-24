@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kubernetes
+package overkube
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 
 //go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 
-// Client is a wrapper object for actual kubevirt clients: virtctl and the kubecli
+// Client is a wrapper object for actual overkube clients: kubernetesClient and runtimeClient
 type Client interface {
 	PatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
 	StatusPatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error

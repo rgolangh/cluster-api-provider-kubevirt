@@ -9,17 +9,15 @@ import (
 
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
-	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/golang/mock/gomock"
-	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
-	mockkubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes/mock"
-	kubevirtClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
-	mockkubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt/mock"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
+	mockoverkube "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube/mock"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
+	mockunderkube "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube/mock"
 	"gotest.tools/assert"
 )
 
-func initializeMachine(t *testing.T, mockKubevirtClient *mockkubevirtclient.MockClient, labels map[string]string, providerID string) *machinev1.Machine {
+func initializeMachine(t *testing.T, mockUnderkube *mockunderkube.MockClient, labels map[string]string, providerID string) *machinev1.Machine {
 	machine, stubMachineErr := stubMachine(labels, providerID)
 
 	if stubMachineErr != nil {
@@ -83,18 +81,18 @@ func TestCreate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
-			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			mockKubernetesClient := mockkubernetesclient.NewMockClient(mockCtrl)
-			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
+			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			kubevirtClientMockBuilder := func(kubernetesClient kubernetesclient.Client, secretName, namespace string) (kubevirtClient.Client, error) {
-				return mockKubevirtClient, nil
+			kubevirtClientMockBuilder := func(overkubeClient overkube.Client, secretName, namespace string) (underkube.Client, error) {
+				return mockUnderkube, nil
 			}
 
-			machineScope, err := stubMachineScope(machine, mockKubernetesClient, kubevirtClientMockBuilder)
+			machineScope, err := stubMachineScope(machine, mockOvernderkube, kubevirtClientMockBuilder)
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -105,14 +103,14 @@ func TestCreate(t *testing.T) {
 			returnVM := stubVirtualMachine(machineScope)
 			returnVM.Status.Ready = tc.wantVMToBeReady
 
-			mockKubevirtClient.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateError).AnyTimes()
-			mockKubevirtClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			mockUnderkube.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateError).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			// TODO: test negative flow, return err != nil
-			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
-			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
+			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			err = providerVMInstance.Create(machine)
 			if tc.wantValidateMachineErr != "" {
 				assert.Equal(t, tc.wantValidateMachineErr, err.Error())
@@ -201,19 +199,19 @@ func TestDelete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
-			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			mockKubernetesClient := mockkubernetesclient.NewMockClient(mockCtrl)
+			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
+			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
 
-			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			kubevirtClientMockBuilder := func(kubernetesClient kubernetesclient.Client, secretName, namespace string) (kubevirtClient.Client, error) {
-				return mockKubevirtClient, nil
+			kubevirtClientMockBuilder := func(kubernetesClient overkube.Client, secretName, namespace string) (underkube.Client, error) {
+				return mockUnderkube, nil
 			}
 
-			machineScope, err := stubMachineScope(machine, mockKubernetesClient, kubevirtClientMockBuilder)
+			machineScope, err := stubMachineScope(machine, mockOvernderkube, kubevirtClientMockBuilder)
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -226,18 +224,18 @@ func TestDelete(t *testing.T) {
 				returnVM = virtualMachine
 			}
 
-			//kubevirt mocks
-			mockKubevirtClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
-			mockKubevirtClient.EXPECT().DeleteVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteError).AnyTimes()
-			mockKubevirtClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			//underkube mocks
+			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
+			mockUnderkube.EXPECT().DeleteVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteError).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
-			//kubernetes mocks
+			//overkube mocks
 			// TODO: test negative flow, return err != nil
-			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
-			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
+			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			err = providerVMInstance.Delete(machine)
 
 			if tc.wantValidateMachineErr != "" {
@@ -293,19 +291,19 @@ func TestExists(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
-			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			mockKubernetesClient := mockkubernetesclient.NewMockClient(mockCtrl)
+			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
+			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
 
-			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			kubevirtClientMockBuilder := func(kubernetesClient kubernetesclient.Client, secretName, namespace string) (kubevirtClient.Client, error) {
-				return mockKubevirtClient, nil
+			kubevirtClientMockBuilder := func(kubernetesClient overkube.Client, secretName, namespace string) (underkube.Client, error) {
+				return mockUnderkube, nil
 			}
 
-			machineScope, err := stubMachineScope(machine, mockKubernetesClient, kubevirtClientMockBuilder)
+			machineScope, err := stubMachineScope(machine, mockOvernderkube, kubevirtClientMockBuilder)
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -318,12 +316,12 @@ func TestExists(t *testing.T) {
 				returnVM = virtualMachine
 			}
 
-			//kubevirt mocks
-			mockKubevirtClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
-			mockKubevirtClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
-			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			//underkube mocks
+			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
-			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
+			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			existsVM, err := providerVMInstance.Exists(machine)
 
 			if tc.clientGetError != nil {
@@ -424,19 +422,19 @@ func TestUpdate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
-			mockKubevirtClient := mockkubevirtclient.NewMockClient(mockCtrl)
-			mockKubernetesClient := mockkubernetesclient.NewMockClient(mockCtrl)
+			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
+			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
 
-			machine := initializeMachine(t, mockKubevirtClient, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			kubevirtClientMockBuilder := func(kubernetesClient kubernetesclient.Client, secretName, namespace string) (kubevirtClient.Client, error) {
-				return mockKubevirtClient, nil
+			kubevirtClientMockBuilder := func(kubernetesClient overkube.Client, secretName, namespace string) (underkube.Client, error) {
+				return mockUnderkube, nil
 			}
 
-			machineScope, err := stubMachineScope(machine, mockKubernetesClient, kubevirtClientMockBuilder)
+			machineScope, err := stubMachineScope(machine, mockOvernderkube, kubevirtClientMockBuilder)
 			if err != nil {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
@@ -453,16 +451,16 @@ func TestUpdate(t *testing.T) {
 
 			updateReturnVM := stubVirtualMachine(machineScope)
 
-			mockKubevirtClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetError).AnyTimes()
-			mockKubevirtClient.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
-			mockKubevirtClient.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
-			mockKubevirtClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetError).AnyTimes()
+			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
+			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateError).AnyTimes()
+			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 			// TODO: test negative flow, return err != nil
-			mockKubernetesClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockKubernetesClient.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
+			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
-			providerVMInstance := New(kubevirtClientMockBuilder, mockKubernetesClient)
+			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			// TODO: test the bool wasUpdated
 			_, err = providerVMInstance.Update(machine)
 

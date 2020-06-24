@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
-	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
@@ -18,7 +18,7 @@ import (
 const (
 	requeueAfterSeconds      = 20
 	requeueAfterFatalSeconds = 180
-	masterLabel              = "node-role.kubernetes.io/master"
+	masterLabel              = "node-role.kubevirt.io/master"
 )
 
 // ProviderVM runs the logic to reconciles a machine resource towards its desired state
@@ -30,24 +30,24 @@ type ProviderVM interface {
 }
 
 // manager is the struct which implement ProviderVM interface
-// Use kubernetesClient to access secret params assigned by user
-// Use kubevirtClientBuilder to create the UnderKube kubevirtClient used
+// Use overkubeClient to access secret params assigned by user
+// Use underkubeClientBuilder to create the kubevirt kubernetes used
 type manager struct {
-	kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType
-	kubernetesClient      kubernetesclient.Client
+	underkubeClientBuilder underkube.ClientBuilderFuncType
+	overkubeClient         overkube.Client
 }
 
 // New creates provider vm instance
-func New(kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType, kubernetesClient kubernetesclient.Client) ProviderVM {
+func New(underkubeClientBuilder underkube.ClientBuilderFuncType, overkubeClient overkube.Client) ProviderVM {
 	return &manager{
-		kubernetesClient:      kubernetesClient,
-		kubevirtClientBuilder: kubevirtClientBuilder,
+		overkubeClient:         overkubeClient,
+		underkubeClientBuilder: underkubeClientBuilder,
 	}
 }
 
 // Create creates machine if it does not exists.
 func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
-	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 
 // delete deletes machine
 func (m *manager) Delete(machine *machinev1.Machine) error {
-	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 
 // update finds a vm and reconciles the machine resource status against it.
 func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr error) {
-	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
 	if err != nil {
 		return false, err
 	}
@@ -205,7 +205,7 @@ func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope *ma
 
 // exists returns true if machine exists.
 func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
-	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
 	if err != nil {
 		return false, err
 	}
@@ -231,23 +231,23 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 }
 
 func (m *manager) createVM(virtualMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.CreateVirtualMachine(virtualMachine.Namespace, virtualMachine)
+	return machineScope.underkubeClient.CreateVirtualMachine(virtualMachine.Namespace, virtualMachine)
 }
 
 func (m *manager) getVM(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.GetVirtualMachine(vmNamespace, vmName, &k8smetav1.GetOptions{})
+	return machineScope.underkubeClient.GetVirtualMachine(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
 func (m *manager) getVMI(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachineInstance, error) {
-	return machineScope.kubevirtClient.GetVirtualMachineInstance(vmNamespace, vmName, &k8smetav1.GetOptions{})
+	return machineScope.underkubeClient.GetVirtualMachineInstance(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
 
 func (m *manager) deleteVM(vmName, vmNamespace string, machineScope *machineScope) error {
 	gracePeriod := int64(10)
-	return machineScope.kubevirtClient.DeleteVirtualMachine(vmNamespace, vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
+	return machineScope.underkubeClient.DeleteVirtualMachine(vmNamespace, vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
 }
 
 func (m *manager) updateVM(updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.kubevirtClient.UpdateVirtualMachine(updatedVM.Namespace, updatedVM)
+	return machineScope.underkubeClient.UpdateVirtualMachine(updatedVM.Namespace, updatedVM)
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane

@@ -16,5 +16,5 @@ var (
 	Version = semver.MustParse(strings.TrimLeft(Raw, "v"))
 
 	// String is the human-friendly representation of the version.
-	String = fmt.Sprintf("ClusterAPIProviderAWS %s", Raw)
+	String = fmt.Sprintf("ClusterAPIProviderKubevirt %s", Raw)
 )

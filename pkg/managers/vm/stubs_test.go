@@ -13,8 +13,8 @@ import (
 
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
-	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
 
 	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
@@ -24,8 +24,6 @@ import (
 const (
 	defaultNamespace         = "default"
 	mahcineName              = "machine-test"
-	userDataSecretName       = "kubevirt-actuator-user-data-secret"
-	keyName                  = "kubevirt-actuator-key-name"
 	clusterID                = "kubevirt-actuator-cluster"
 	clusterName              = "kubevirt-actuator-cluster"
 	userDataValue            = "123"
@@ -49,7 +47,7 @@ func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineIns
 	return &vmi, nil
 }
 
-func stubMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclient.Client, kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType) (*machineScope, error) {
+func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
 	providerSpec, err := kubevirtproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine config: %v", err)
@@ -60,14 +58,14 @@ func stubMachineScope(machine *machinev1.Machine, kubernetesClient kubernetescli
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := kubevirtClientBuilder(kubernetesClient, providerSpec.SecretName, machine.GetNamespace())
+	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.SecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
 	return &machineScope{
-		kubevirtClient:        kubevirtClient,
-		kubernetesClient:      kubernetesClient,
+		underkubeClient:       kubevirtClient,
+		overkubeClient:        overkubeClient,
 		machine:               machine,
 		originMachineCopy:     machine.DeepCopy(),
 		machineProviderSpec:   providerSpec,
