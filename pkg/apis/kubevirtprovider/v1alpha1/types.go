@@ -17,12 +17,16 @@ limitations under the License.
 package v1alpha1
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )
 
 // KubevirtMachineProviderSpec is the Schema for the KubevirtMachineProviderSpec API
 // +k8s:openapi-gen=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type KubevirtMachineProviderSpec struct {
+	metav1.TypeMeta           `json:",inline"`
 	SourcePvcName             string `json:"sourcePvcName,omitempty"`
 	SourcePvcNamespace        string `json:"sourcePvcNamespace,omitempty"`
 	UnderKubeconfigSecretName string `json:"underKubeconfigSecretName,omitempty"`
@@ -30,13 +34,17 @@ type KubevirtMachineProviderSpec struct {
 	RequestedCPU              string `json:"requestedCPU,omitempty"`
 	StorageClassName          string `json:"storageClassName,omitempty"`
 	IgnitionSecretName        string `json:"ignitionSecretName,omitempty"`
-	// TODO: add here the required CPU, Memory, machine type
-	// ignition    string `json:"pvcName,omitempty"`
 }
 
 // KubevirtMachineProviderStatus is the type that will be embedded in a Machine.Status.ProviderStatus field.
 // It contains Kubevirt-specific status information.
+// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type KubevirtMachineProviderStatus struct {
+	metav1.TypeMeta `json:",inline"`
 	kubevirtapiv1.VirtualMachineStatus
+}
+
+func init() {
+	SchemeBuilder.Register(&KubevirtMachineProviderSpec{}, &KubevirtMachineProviderStatus{})
 }
