@@ -129,8 +129,8 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 	}
 	requests[corev1.ResourceMemory] = apiresource.MustParse(requestedMemory)
 
-	if s.machineProviderSpec.RequestedCPU != "" {
-		requests[corev1.ResourceCPU] = apiresource.MustParse(s.machineProviderSpec.RequestedCPU)
+	if s.machineProviderSpec.RequestedCPU != 0 {
+		requests[corev1.ResourceCPU] = apiresource.MustParse(fmt.Sprint(s.machineProviderSpec.RequestedCPU))
 	}
 
 	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
