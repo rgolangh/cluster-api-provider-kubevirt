@@ -30,8 +30,8 @@ const (
 )
 
 const (
-	pvcRequestsStorage                = "35Gi"
 	defaultRequestedMemory            = "2048M"
+	defaultRequestedStorage           = "35Gi"
 	defaultPersistentVolumeAccessMode = corev1.ReadWriteOnce
 	defaultDataVolumeDiskName         = "datavolumedisk1"
 	defaultCloudInitVolumeDiskName    = "cloudinitdisk"
@@ -114,11 +114,16 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 		return nil, err
 	}
 
+	pvcRequestsStorage := s.machineProviderSpec.RequestedStorage
+	if pvcRequestsStorage == "" {
+		pvcRequestsStorage = defaultRequestedStorage
+	}
+
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.SourcePvcNamespace, s.machineProviderSpec.StorageClassName),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage),
 			},
 			Template: vmiTemplate,
 		},
@@ -195,6 +200,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName, "name": virtualMachineName},
 	}
 
+	// TODO: Use 'getUserData' after fixing the blocking port
 	//userData, err := s.getUserData(namespace)
 	//if err != nil {
 	//	return nil, err
@@ -232,6 +238,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	if requestedMemory == "" {
 		requestedMemory = defaultRequestedMemory
 	}
+
 	requests[corev1.ResourceMemory] = apiresource.MustParse(requestedMemory)
 
 	if s.machineProviderSpec.RequestedCPU != 0 {
@@ -282,7 +289,7 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 	return userData, nil
 }
 
-func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace, storageClassName string) *cdiv1.DataVolume {
+func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName, pvcRequestsStorage string) *cdiv1.DataVolume {
 
 	persistentVolumeClaimSpec := corev1.PersistentVolumeClaimSpec{
 		// TODO: Need to determine it by the type of storage class: pvc.Spec.StorageClassName
@@ -311,7 +318,6 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 				PVC: &cdiv1.DataVolumeSourcePVC{
 					Name:      pvcName,
 					Namespace: dvNamespace,
-					//Namespace: pvcNamespace,
 				},
 			},
 			PVC: &persistentVolumeClaimSpec,

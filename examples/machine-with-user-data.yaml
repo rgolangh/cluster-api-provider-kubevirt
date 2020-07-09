@@ -19,9 +19,10 @@ spec:
       kind: KubevirtMachineProviderSpec
       UnderKubeconfigSecretName: underkube-config
       SourcePvcName: pvc-rhcos-image
-      SourcePvcNamespace: openshift-machine-api
       RequestedMemory: "2048M"
-      RequestedCPU: ""
+      RequestedCPU: 2
+      RequestedStorage: "35Gi",
+      MachineType: ""
       StorageClassName: ""
       IgnitionSecretName: "worker-user-data"
 

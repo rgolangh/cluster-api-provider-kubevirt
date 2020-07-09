@@ -28,10 +28,10 @@ import (
 type KubevirtMachineProviderSpec struct {
 	metav1.TypeMeta           `json:",inline"`
 	SourcePvcName             string `json:"sourcePvcName,omitempty"`
-	SourcePvcNamespace        string `json:"sourcePvcNamespace,omitempty"`
 	UnderKubeconfigSecretName string `json:"underKubeconfigSecretName,omitempty"`
 	RequestedMemory           string `json:"requestedMemory,omitempty"`
 	RequestedCPU              uint32 `json:"requestedCPU,omitempty"`
+	RequestedStorage          string `json:"requestedStorage,omitempty"`
 	StorageClassName          string `json:"storageClassName,omitempty"`
 	IgnitionSecretName        string `json:"ignitionSecretName,omitempty"`
 }
