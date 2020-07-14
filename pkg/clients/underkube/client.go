@@ -37,7 +37,7 @@ const (
 )
 
 // ClientBuilderFuncType is function type for building underkube client
-type ClientBuilderFuncType func(overKubernetesClient overkube.Client, secretName, namespace string) (Client, error)
+type ClientBuilderFuncType func(overKubernetesClient overkube.Client, underKubeconfigSecretName, namespace string) (Client, error)
 
 // Client is a wrapper object for actual underkube clients: kubernetes and the kubevirt
 type Client interface {
@@ -63,42 +63,41 @@ type client struct {
 }
 
 // New creates our client wrapper object for the actual kubeVirt and kubernetes clients we use.
-func New(overKubernetesClient overkube.Client, secretName, namespace string) (Client, error) {
-	if secretName == "" {
-		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty secretName")
+func New(overKubernetesClient overkube.Client, underKubeconfigSecretName, namespace string) (Client, error) {
+	if underKubeconfigSecretName == "" {
+		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty UnderKubeconfigSecretName")
 	}
 
 	if namespace == "" {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty namespace")
 	}
 
-	userDataSecret, getSecretErr := overKubernetesClient.UserDataSecret(secretName, namespace)
-	if getSecretErr != nil {
-		if apimachineryerrors.IsNotFound(getSecretErr) {
-			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", namespace, secretName, getSecretErr)
+	returnedSecret, err := overKubernetesClient.GetSecret(underKubeconfigSecretName, namespace)
+	if err != nil {
+		if apimachineryerrors.IsNotFound(err) {
+			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", namespace, underKubeconfigSecretName, err)
 		}
-		return nil, getSecretErr
+		return nil, err
 	}
-	underKubeConfig, ok := userDataSecret.Data[underKubeConfig]
+	underKubeConfig, ok := returnedSecret.Data[underKubeConfig]
 	if !ok {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %v did not contain key %v",
-			secretName, underKubeConfig)
+			underKubeconfigSecretName, underKubeConfig)
 	}
 
-	kubevirtConfig, err := clientcmd.NewClientConfigFromBytes(underKubeConfig)
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(underKubeConfig)
 	if err != nil {
 		return nil, err
 	}
-	kubevirtClient, getClientErr := kubecli.GetKubevirtClientFromClientConfig(kubevirtConfig)
+	kubevirtClient, getClientErr := kubecli.GetKubevirtClientFromClientConfig(clientConfig)
 	if getClientErr != nil {
 		return nil, getClientErr
 	}
-
-	kubernetesConfig, err := clientcmd.BuildConfigFromFlags("", string(underKubeConfig))
+	restClientConfig, err := clientConfig.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
-	kubernetesClient, err := kubernetes.NewForConfig(kubernetesConfig)
+	kubernetesClient, err := kubernetes.NewForConfig(restClientConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -49,7 +49,7 @@ func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineIns
 
 func stubService(vmName string) *corev1.Service {
 	service := &corev1.Service{}
-	service.Name = fmt.Sprint(servicePrefixName, vmName)
+	service.Name = vmName
 	service.Spec = corev1.ServiceSpec{
 		ClusterIP: "",
 		Selector:  map[string]string{"name": "worker-" + vmName},
@@ -67,7 +67,7 @@ func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.SecretName, machine.GetNamespace())
+	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.UnderKubeconfigSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -94,7 +94,7 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
 
 	template.ObjectMeta = metav1.ObjectMeta{
-		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName},
+		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName, "name": virtualMachineName},
 	}
 
 	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
@@ -111,7 +111,9 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserData: userDataValue,
+					UserDataSecretRef: &corev1.LocalObjectReference{
+						Name: s.machineProviderSpec.IgnitionSecretName,
+					},
 				},
 			},
 		},
@@ -163,35 +165,36 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 	runAlways := kubevirtapiv1.RunStrategyAlways
 	namespace := machineScope.machine.Labels[machinev1.MachineClusterIDLabel]
 	vmiTemplate := stubBuildVMITemplate(machineScope)
-
+	storageClassName := ""
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, machineScope.machineProviderSpec.SourcePvcNamespace),
+				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, machineScope.machineProviderSpec.SourcePvcNamespace, storageClassName),
 			},
 			Template: vmiTemplate,
 		},
 		Status: machineScope.machineProviderStatus.VirtualMachineStatus,
 	}
 
-	virtualMachine.TypeMeta = machineScope.machine.TypeMeta
+	virtualMachine.APIVersion = APIVersion
+	virtualMachine.Kind = Kind
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:            machineScope.machine.Name,
 		Namespace:       namespace,
 		Labels:          machineScope.machine.Labels,
 		Annotations:     machineScope.machine.Annotations,
-		OwnerReferences: machineScope.machine.OwnerReferences,
+		OwnerReferences: nil,
 		ClusterName:     machineScope.machine.ClusterName,
-		ResourceVersion: machineScope.machineProviderStatus.ResourceVersion,
 	}
 
 	return &virtualMachine
 }
 func stubMachine(labels map[string]string, providerID string) (*machinev1.Machine, error) {
 	providerSpecValue, providerSpecValueErr := kubevirtproviderv1.RawExtensionFromProviderSpec(&kubevirtproviderv1.KubevirtMachineProviderSpec{
-		SourcePvcName:      SourceTestPvcName,
-		IgnitionSecretName: workerUserDataSecretName,
+		SourcePvcName:             SourceTestPvcName,
+		IgnitionSecretName:        workerUserDataSecretName,
+		UnderKubeconfigSecretName: workerUserDataSecretName,
 	})
 	if labels == nil {
 		labels = map[string]string{

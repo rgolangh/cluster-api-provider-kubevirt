@@ -84,7 +84,7 @@ func main() {
 		entryLog.Error(err, "Failed to create overkube client from configuration")
 	}
 
-	// Initialize provider vm manager
+	// Initialize provider vm manager (underkubeClientBuilder would be the function underkube.New)
 	providerVM := vm.New(underkube.New, kubernetesClient)
 
 	// Initialize machine actuator.

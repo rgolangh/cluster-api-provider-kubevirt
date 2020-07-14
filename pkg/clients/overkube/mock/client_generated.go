@@ -62,17 +62,17 @@ func (mr *MockClientMockRecorder) StatusPatchMachine(machine, originMachineCopy 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StatusPatchMachine", reflect.TypeOf((*MockClient)(nil).StatusPatchMachine), machine, originMachineCopy)
 }
 
-// UserDataSecret mocks base method
-func (m *MockClient) UserDataSecret(secretName, namespace string) (*v1.Secret, error) {
+// GetSecret mocks base method
+func (m *MockClient) GetSecret(secretName, namespace string) (*v1.Secret, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UserDataSecret", secretName, namespace)
+	ret := m.ctrl.Call(m, "GetSecret", secretName, namespace)
 	ret0, _ := ret[0].(*v1.Secret)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// UserDataSecret indicates an expected call of UserDataSecret
-func (mr *MockClientMockRecorder) UserDataSecret(secretName, namespace interface{}) *gomock.Call {
+// GetSecret indicates an expected call of GetSecret
+func (mr *MockClientMockRecorder) GetSecret(secretName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UserDataSecret", reflect.TypeOf((*MockClient)(nil).UserDataSecret), secretName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecret", reflect.TypeOf((*MockClient)(nil).GetSecret), secretName, namespace)
 }

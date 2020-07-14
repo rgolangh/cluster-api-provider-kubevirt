@@ -26,7 +26,7 @@ type machineState string
 const (
 	vmNotCreated      machineState = "vmNotCreated"
 	vmCreatedNotReady machineState = "vmWasCreatedButNotReady"
-	vmCreatedAndReady machineState = "vmWasCreatedButAndReady"
+	vmCreatedAndReady machineState = "vmWasCreatedAndReady"
 )
 
 const (
@@ -39,6 +39,8 @@ const (
 	kubevirtIdAnnotationKey           = "VmId"
 	userDataKey                       = "userData"
 	defaultBus                        = "virtio"
+	APIVersion                        = "kubevirt.io/v1alpha3"
+	Kind                              = "VirtualMachine"
 )
 
 type machineScope struct {
@@ -65,7 +67,7 @@ func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client,
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.SecretName, machine.GetNamespace())
+	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.UnderKubeconfigSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -86,7 +88,22 @@ func getVMNamespace(machine *machinev1.Machine) string {
 	}
 	return namespace
 }
-func (s *machineScope) machineToVirtualMachine() (*kubevirtapiv1.VirtualMachine, error) {
+func (s *machineScope) assertMandatoryParams() error {
+	switch {
+	case s.machineProviderSpec.SourcePvcName == "":
+		return machinecontroller.InvalidMachineConfiguration("%v: missing value for SourcePvcName", s.machine.GetName())
+	case s.machineProviderSpec.UnderKubeconfigSecretName == "":
+		return machinecontroller.InvalidMachineConfiguration("%v: missing value for UnderKubeconfigSecretName", s.machine.GetName())
+	case s.machineProviderSpec.IgnitionSecretName == "":
+		return machinecontroller.InvalidMachineConfiguration("%v: missing value for IgnitionSecretName", s.machine.GetName())
+	default:
+		return nil
+	}
+}
+func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error) {
+	if err := s.assertMandatoryParams(); err != nil {
+		return nil, err
+	}
 	runAlways := kubevirtapiv1.RunStrategyAlways
 	// use getClusterID as a namespace
 	// TODO: if there isnt a cluster id - need to return an error
@@ -101,22 +118,22 @@ func (s *machineScope) machineToVirtualMachine() (*kubevirtapiv1.VirtualMachine,
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.SourcePvcNamespace),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.SourcePvcNamespace, s.machineProviderSpec.StorageClassName),
 			},
 			Template: vmiTemplate,
 		},
 		Status: s.machineProviderStatus.VirtualMachineStatus,
 	}
 
-	virtualMachine.TypeMeta = s.machine.TypeMeta
+	virtualMachine.APIVersion = APIVersion
+	virtualMachine.Kind = Kind
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:            s.machine.Name,
 		Namespace:       namespace,
 		Labels:          s.machine.Labels,
 		Annotations:     s.machine.Annotations,
-		OwnerReferences: s.machine.OwnerReferences,
+		OwnerReferences: nil,
 		ClusterName:     s.machine.ClusterName,
-		ResourceVersion: s.machineProviderStatus.ResourceVersion,
 	}
 
 	return &virtualMachine, nil
@@ -176,13 +193,13 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
 
 	template.ObjectMeta = metav1.ObjectMeta{
-		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName},
+		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName, "name": virtualMachineName},
 	}
 
-	userData, err := s.getUserData(namespace)
-	if err != nil {
-		return nil, err
-	}
+	//userData, err := s.getUserData(namespace)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
 	template.Spec.Volumes = []kubevirtapiv1.Volume{
@@ -198,7 +215,11 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserData: userData,
+					UserDataSecretRef: &corev1.LocalObjectReference{
+						Name: s.machineProviderSpec.IgnitionSecretName,
+					},
+					// TODO: Use UserData after fixing the blocking port
+					//UserData: userData,
 				},
 			},
 		},
@@ -248,7 +269,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 
 func (s *machineScope) getUserData(namespace string) (string, error) {
 	secretName := s.machineProviderSpec.IgnitionSecretName
-	userDataSecret, err := s.overkubeClient.UserDataSecret(secretName, s.machine.GetNamespace())
+	userDataSecret, err := s.overkubeClient.GetSecret(secretName, s.machine.GetNamespace())
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
 			return "", machinecontroller.InvalidMachineConfiguration("Overkube credentials secret %s/%s: %v not found", namespace, secretName, err)
@@ -263,7 +284,24 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 	return userData, nil
 }
 
-func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace string) *cdiv1.DataVolume {
+func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace, storageClassName string) *cdiv1.DataVolume {
+
+	persistentVolumeClaimSpec := corev1.PersistentVolumeClaimSpec{
+		// TODO: Need to determine it by the type of storage class: pvc.Spec.StorageClassName
+		AccessModes: []corev1.PersistentVolumeAccessMode{
+			defaultPersistentVolumeAccessMode,
+		},
+		// TODO: Where to get it?? - add as a list
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: apiresource.MustParse(pvcRequestsStorage),
+			},
+		},
+	}
+	if storageClassName != "" {
+		persistentVolumeClaimSpec.StorageClassName = &storageClassName
+	}
+
 	return &cdiv1.DataVolume{
 		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
@@ -278,18 +316,7 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 					//Namespace: pvcNamespace,
 				},
 			},
-			PVC: &corev1.PersistentVolumeClaimSpec{
-				// TODO: Need to determine it by the type of storage class: pvc.Spec.StorageClassName
-				AccessModes: []corev1.PersistentVolumeAccessMode{
-					defaultPersistentVolumeAccessMode,
-				},
-				// TODO: Where to get it?? - add as a list
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: apiresource.MustParse(pvcRequestsStorage),
-					},
-				},
-			},
+			PVC: &persistentVolumeClaimSpec,
 		},
 	}
 }
@@ -375,7 +402,6 @@ func (s *machineScope) patchMachine() error {
 func machineProviderStatusFromVirtualMachine(virtualMachine *kubevirtapiv1.VirtualMachine) *kubevirtproviderv1.KubevirtMachineProviderStatus {
 	return &kubevirtproviderv1.KubevirtMachineProviderStatus{
 		VirtualMachineStatus: virtualMachine.Status,
-		ResourceVersion:      virtualMachine.ResourceVersion,
 	}
 }
 

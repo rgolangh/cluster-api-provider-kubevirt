@@ -17,7 +17,7 @@ spec:
     value:
       # TODO: determine the version : apiVersion: kubevirtproviderconfig.openshift.io/v1beta1
       kind: KubevirtMachineProviderSpec
-      SecretName: underkube-config
+      UnderKubeconfigSecretName: underkube-config
       SourcePvcName: pvc-rhcos-image
       SourcePvcNamespace: openshift-machine-api
       RequestedMemory: "2048M"

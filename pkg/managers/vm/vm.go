@@ -21,7 +21,6 @@ const (
 	requeueAfterSeconds      = 20
 	requeueAfterFatalSeconds = 180
 	masterLabel              = "node-role.kubevirt.io/master"
-	servicePrefixName        = "worker-"
 )
 
 // ProviderVM runs the logic to reconciles a machine resource towards its desired state
@@ -55,7 +54,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 		return err
 	}
 
-	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
+	virtualMachineFromMachine, err := machineScope.createVirtualMachineFromMachine()
 	if err != nil {
 		return err
 	}
@@ -71,6 +70,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 	}()
 
 	createdVM, err := m.createUnderkubeVM(virtualMachineFromMachine, machineScope)
+
 	if err != nil {
 		klog.Errorf("%s: error creating machine: %v", machineScope.getMachineName(), err)
 		conditionFailed := conditionFailed()
@@ -103,7 +103,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 		return err
 	}
 
-	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
+	virtualMachineFromMachine, err := machineScope.createVirtualMachineFromMachine()
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr
 		return false, err
 	}
 
-	virtualMachineFromMachine, err := machineScope.machineToVirtualMachine()
+	virtualMachineFromMachine, err := machineScope.createVirtualMachineFromMachine()
 	if err != nil {
 		return false, err
 	}
@@ -228,6 +228,9 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 
 	klog.Infof("Updated machine %s", machineScope.getMachineName())
 
+	// TODO: remove it
+	time.Sleep(2 * time.Second)
+
 	//Get an updatedVM with more details
 	getUpdatedVM, err := m.getUnderkubeVM(updatedVM.GetName(), updatedVM.GetNamespace(), machineScope)
 	if err != nil {
@@ -235,6 +238,7 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 		getUpdatedVM = updatedVM
 	}
 	wasUpdated := previousResourceVersion != currentResourceVersion
+	//getUpdatedVM.ResourceVersion = previousResourceVersion
 
 	return wasUpdated, getUpdatedVM, nil
 }
@@ -326,20 +330,21 @@ func (m *manager) updateUnderkubeVM(updatedVM *kubevirtapiv1.VirtualMachine, mac
 
 func (m *manager) createUnderkubeService(vmName, namespace string, machineScope *machineScope) (*corev1.Service, error) {
 	service := &corev1.Service{}
-	service.Name = fmt.Sprint(servicePrefixName, vmName)
+	service.Name = vmName
 	service.Spec = corev1.ServiceSpec{
-		ClusterIP: "",
-		Selector:  map[string]string{"name": "worker-" + vmName},
+		ClusterIP: "None",
+		Selector:  map[string]string{"name": vmName},
+		Type:      corev1.ServiceTypeClusterIP,
 	}
 
 	return machineScope.underkubeClient.CreateService(service, namespace)
 }
 
 func (m *manager) deleteUnderkubeService(vmName, namespace string, machineScope *machineScope) error {
-	return machineScope.underkubeClient.DeleteService(fmt.Sprint(servicePrefixName, vmName), namespace, &k8smetav1.DeleteOptions{})
+	return machineScope.underkubeClient.DeleteService(vmName, namespace, &k8smetav1.DeleteOptions{})
 }
 func (m *manager) getUnderkubeService(vmName, namespace string, machineScope *machineScope) (*corev1.Service, error) {
-	return machineScope.underkubeClient.GetService(fmt.Sprint(servicePrefixName, vmName), namespace, k8smetav1.GetOptions{})
+	return machineScope.underkubeClient.GetService(vmName, namespace, k8smetav1.GetOptions{})
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane

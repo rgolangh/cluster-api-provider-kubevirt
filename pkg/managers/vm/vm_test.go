@@ -130,7 +130,7 @@ func TestCreate(t *testing.T) {
 
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			mockOvernderkube.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			err = providerVMInstance.Create(machine)
@@ -167,21 +167,21 @@ func TestDelete(t *testing.T) {
 		labels                   map[string]string
 		providerID               string
 	}{
-		//{
-		//	name:                     "Delete a VM successfully",
-		//	wantValidateMachineErr:   "",
-		//	wantGetVMErr:             "",
-		//	clientGetVMError:         nil,
-		//	wantDeleteVMErr:          "",
-		//	clientDeleteVMError:      nil,
-		//	emptyGetVM:               false,
-		//	labels:                   nil,
-		//	providerID:               "",
-		//	wantDeleteServiceErr:     "",
-		//	wantGetServiceErr:        "",
-		//	ClientDeleteServiceError: nil,
-		//	ClientGetServiceError:    nil,
-		//},
+		{
+			name:                     "Delete a VM successfully",
+			wantValidateMachineErr:   "",
+			wantGetVMErr:             "",
+			clientGetVMError:         nil,
+			wantDeleteVMErr:          "",
+			clientDeleteVMError:      nil,
+			emptyGetVM:               false,
+			labels:                   nil,
+			providerID:               "",
+			wantDeleteServiceErr:     "",
+			wantGetServiceErr:        "",
+			ClientDeleteServiceError: nil,
+			ClientGetServiceError:    nil,
+		},
 		{
 			name:                     "Delete a VM successfully but fail on get service",
 			wantValidateMachineErr:   "",
@@ -292,21 +292,21 @@ func TestDelete(t *testing.T) {
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			if tc.wantGetServiceErr == "" {
-				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
+				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
 			} else {
-				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(nil, tc.ClientGetServiceError).AnyTimes()
+				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(nil, tc.ClientGetServiceError).AnyTimes()
 			}
 			if tc.wantDeleteServiceErr == "" {
-				mockUnderkube.EXPECT().DeleteService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(nil).AnyTimes()
+				mockUnderkube.EXPECT().DeleteService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(nil).AnyTimes()
 			} else {
-				mockUnderkube.EXPECT().DeleteService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(tc.ClientDeleteServiceError).AnyTimes()
+				mockUnderkube.EXPECT().DeleteService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(tc.ClientDeleteServiceError).AnyTimes()
 			}
 
 			//overkube mocks
 			// TODO: test negative flow, return err != nil
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			mockOvernderkube.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			err = providerVMInstance.Delete(machine)
@@ -398,7 +398,7 @@ func TestExists(t *testing.T) {
 			//underkube mocks
 			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
-			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			mockOvernderkube.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			existsVM, err := providerVMInstance.Exists(machine)
@@ -571,9 +571,9 @@ func TestUpdate(t *testing.T) {
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			if tc.wantGetServiceErr == "" {
-				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
+				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
 			} else {
-				mockUnderkube.EXPECT().GetService(fmt.Sprint(servicePrefixName, virtualMachine.Name), virtualMachine.Namespace, gomock.Any()).Return(nil, tc.clientGetServiceError).AnyTimes()
+				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(nil, tc.clientGetServiceError).AnyTimes()
 			}
 			if tc.wantCreateServiceErr == "" {
 				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(stubService(virtualMachine.Name), nil).AnyTimes()
@@ -585,7 +585,7 @@ func TestUpdate(t *testing.T) {
 			// TODO: test negative flow, return err != nil
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			mockOvernderkube.EXPECT().UserDataSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			mockOvernderkube.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 
 			providerVMInstance := New(kubevirtClientMockBuilder, mockOvernderkube)
 			// TODO: test the bool wasUpdated

@@ -23,14 +23,14 @@ import (
 // KubevirtMachineProviderSpec is the Schema for the KubevirtMachineProviderSpec API
 // +k8s:openapi-gen=true
 type KubevirtMachineProviderSpec struct {
-	SourcePvcName      string `json:"sourcePvcName,omitempty"`
-	SourcePvcNamespace string `json:"sourcePvcNamespace,omitempty"`
-	SecretName         string `json:"secretName,omitempty"`
-	RequestedMemory    string `json:"requestedMemory,omitempty"`
-	RequestedCPU       string `json:"requestedCPU,omitempty"`
-	MachineType        string `json:"machineType,omitempty"`
-	StorageClassName   string `json:"storageClassName,omitempty"`
-	IgnitionSecretName string `json:"ignitionSecretName,omitempty"`
+	SourcePvcName             string `json:"sourcePvcName,omitempty"`
+	SourcePvcNamespace        string `json:"sourcePvcNamespace,omitempty"`
+	UnderKubeconfigSecretName string `json:"underKubeconfigSecretName,omitempty"`
+	RequestedMemory           string `json:"requestedMemory,omitempty"`
+	RequestedCPU              string `json:"requestedCPU,omitempty"`
+	MachineType               string `json:"machineType,omitempty"`
+	StorageClassName          string `json:"storageClassName,omitempty"`
+	IgnitionSecretName        string `json:"ignitionSecretName,omitempty"`
 	// TODO: add here the required CPU, Memory, machine type
 	// ignition    string `json:"pvcName,omitempty"`
 }
@@ -40,5 +40,4 @@ type KubevirtMachineProviderSpec struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type KubevirtMachineProviderStatus struct {
 	kubevirtapiv1.VirtualMachineStatus
-	ResourceVersion string `json:"resourceVersion,omitempty"`
 }

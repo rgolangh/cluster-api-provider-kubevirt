@@ -33,7 +33,7 @@ import (
 type Client interface {
 	PatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
 	StatusPatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
-	UserDataSecret(secretName string, namespace string) (*corev1.Secret, error)
+	GetSecret(secretName string, namespace string) (*corev1.Secret, error)
 }
 
 type kubeClient struct {
@@ -62,6 +62,6 @@ func (c *kubeClient) StatusPatchMachine(machine *machinev1.Machine, originMachin
 	return c.runtimeClient.Status().Patch(context.Background(), machine, client.MergeFrom(originMachineCopy))
 }
 
-func (c *kubeClient) UserDataSecret(secretName string, namespace string) (*corev1.Secret, error) {
+func (c *kubeClient) GetSecret(secretName string, namespace string) (*corev1.Secret, error) {
 	return c.kubernetesClient.CoreV1().Secrets(namespace).Get(secretName, k8smetav1.GetOptions{})
 }
