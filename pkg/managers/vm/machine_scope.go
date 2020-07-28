@@ -241,7 +241,6 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	template.Spec.Domain.Resources = kubevirtapiv1.ResourceRequirements{
 		Requests: requests,
 	}
-	template.Spec.Domain.Machine = kubevirtapiv1.Machine{Type: s.machineProviderSpec.MachineType}
 	template.Spec.Domain.Devices = kubevirtapiv1.Devices{
 		Disks: []kubevirtapiv1.Disk{
 			{

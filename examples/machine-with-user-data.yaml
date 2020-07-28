@@ -22,7 +22,6 @@ spec:
       SourcePvcNamespace: openshift-machine-api
       RequestedMemory: "2048M"
       RequestedCPU: ""
-      MachineType: ""
       StorageClassName: ""
       IgnitionSecretName: "worker-user-data"
 
