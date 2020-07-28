@@ -122,7 +122,6 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 			},
 			Template: vmiTemplate,
 		},
-		Status: s.machineProviderStatus.VirtualMachineStatus,
 	}
 
 	virtualMachine.APIVersion = APIVersion

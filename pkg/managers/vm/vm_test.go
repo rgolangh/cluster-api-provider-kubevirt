@@ -65,15 +65,6 @@ func TestCreate(t *testing.T) {
 			ClientCreateServiceError: errors.New("client error"),
 		},
 		{
-			name:                   "Create a VM not ready and fail",
-			wantValidateMachineErr: "",
-			wantCreateVMErr:        "",
-			ClientCreateVMError:    nil,
-			labels:                 nil,
-			providerID:             "",
-			wantVMToBeReady:        false,
-		},
-		{
 			name:                   "Create a VM from unlabeled machine and fail",
 			wantValidateMachineErr: fmt.Sprintf("%s: failed validating machine provider spec: %v: missing %q label", mahcineName, mahcineName, machinev1.MachineClusterIDLabel),
 			wantCreateVMErr:        "",
@@ -140,8 +131,6 @@ func TestCreate(t *testing.T) {
 				assert.Equal(t, tc.wantCreateVMErr, err.Error())
 			} else if tc.wantCreateServiceErr != "" {
 				assert.Equal(t, tc.wantCreateServiceErr, err.Error())
-			} else if !tc.wantVMToBeReady {
-				assert.Equal(t, err.Error(), "requeue in: 20s")
 			} else {
 				assert.Equal(t, err, nil)
 			}
@@ -475,18 +464,18 @@ func TestUpdate(t *testing.T) {
 			wantGetServiceErr:        "service not found",
 			clientGetServiceError:    errors.New("service not found"),
 		},
-
-		{
-			name:                   "Update a VM that never be ready",
-			wantValidateMachineErr: "",
-			wantUpdateVMErr:        "",
-			clientGetVMError:       nil,
-			clientUpdateVMError:    nil,
-			emptyGetVM:             false,
-			labels:                 nil,
-			providerID:             "",
-			wantVMToBeReady:        false,
-		},
+		// TODO: enable that test after pushing the PR: https://github.com/kubevirt/kubevirt/pull/3889 so update wouldn't override the vm Status
+		//{
+		//	name:                   "Update a VM that never be ready",
+		//	wantValidateMachineErr: "",
+		//	wantUpdateVMErr:        "",
+		//	clientGetVMError:       nil,
+		//	clientUpdateVMError:    nil,
+		//	emptyGetVM:             false,
+		//	labels:                 nil,
+		//	providerID:             "",
+		//	wantVMToBeReady:        false,
+		//},
 		{
 			name:                   "Update a VM from unlabeled machine and fail",
 			wantValidateMachineErr: fmt.Sprintf("%s: failed validating machine provider spec: %v: missing %q label", mahcineName, mahcineName, machinev1.MachineClusterIDLabel),
@@ -559,15 +548,23 @@ func TestUpdate(t *testing.T) {
 			if !tc.emptyGetVM {
 				returnVMResult := stubVirtualMachine(machineScope)
 				getReturnVM = returnVMResult
+				getReturnVM.Status = kubevirtapiv1.VirtualMachineStatus{
+					Created: true,
+					Ready:   tc.wantVMToBeReady,
+				}
+				getReturnVM.Status.Created = true
 				getReturnVM.Status.Ready = tc.wantVMToBeReady
 
 			}
 
 			updateReturnVM := stubVirtualMachine(machineScope)
+			updateReturnVM.Status = kubevirtapiv1.VirtualMachineStatus{
+				Created: true,
+				Ready:   tc.wantVMToBeReady,
+			}
 
 			mockUnderkube.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetVMError).AnyTimes()
-			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
-			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, virtualMachine).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
+			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, getReturnVM).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			if tc.wantGetServiceErr == "" {

@@ -93,7 +93,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 		return err
 	}
 
-	return m.requeueIfInstancePending(createdVM, machineScope.getMachineName())
+	return nil
 }
 
 // delete deletes machine
@@ -196,7 +196,7 @@ func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr
 		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.getMachineName(), err)
 		return false, err
 	}
-	return wasUpdated, m.requeueIfInstancePending(updatedVM, machineScope.getMachineName())
+	return wasUpdated, nil
 }
 
 func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (bool, *kubevirtapiv1.VirtualMachine, error) {
@@ -220,6 +220,12 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 	previousResourceVersion := existingVM.ResourceVersion
 	virtualMachineFromMachine.ObjectMeta.ResourceVersion = previousResourceVersion
 
+	//TODO remove it after pushing that PR: https://github.com/kubevirt/kubevirt/pull/3889
+	virtualMachineFromMachine.Status = kubevirtapiv1.VirtualMachineStatus{
+		Created: existingVM.Status.Created,
+		Ready:   existingVM.Status.Ready,
+	}
+
 	updatedVM, err := m.updateUnderkubeVM(virtualMachineFromMachine, machineScope)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to update VM: %w", err)
@@ -228,19 +234,8 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 
 	klog.Infof("Updated machine %s", machineScope.getMachineName())
 
-	// TODO: remove it
-	time.Sleep(2 * time.Second)
-
-	//Get an updatedVM with more details
-	getUpdatedVM, err := m.getUnderkubeVM(updatedVM.GetName(), updatedVM.GetNamespace(), machineScope)
-	if err != nil {
-		klog.Errorf("%s: error getting updated VM: %v", machineScope.getMachineName(), err)
-		getUpdatedVM = updatedVM
-	}
 	wasUpdated := previousResourceVersion != currentResourceVersion
-	//getUpdatedVM.ResourceVersion = previousResourceVersion
-
-	return wasUpdated, getUpdatedVM, nil
+	return wasUpdated, updatedVM, nil
 }
 
 func (m *manager) createServiceIfNeeded(err error, updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope, getUpdatedVM *kubevirtapiv1.VirtualMachine, virtualMachineFromMachine *kubevirtapiv1.VirtualMachine) error {

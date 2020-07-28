@@ -174,7 +174,6 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 			},
 			Template: vmiTemplate,
 		},
-		Status: machineScope.machineProviderStatus.VirtualMachineStatus,
 	}
 
 	virtualMachine.APIVersion = APIVersion
