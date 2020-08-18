@@ -17,8 +17,8 @@ import (
 	"gotest.tools/assert"
 )
 
-func initializeMachine(t *testing.T, mockUnderkube *mockunderkube.MockClient, labels map[string]string, providerID string) *machinev1.Machine {
-	machine, stubMachineErr := stubMachine(labels, providerID)
+func initializeMachine(t *testing.T, mockUnderkube *mockunderkube.MockClient, labels map[string]string, providerID string, useDefaultUnderKubeconfigSecretName bool) *machinev1.Machine {
+	machine, stubMachineErr := stubMachine(labels, providerID, useDefaultUnderKubeconfigSecretName)
 
 	if stubMachineErr != nil {
 		t.Fatalf("Unable to build test machine manifest: %v", stubMachineErr)
@@ -32,15 +32,16 @@ func TestCreate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	// TODO add excpect times per
 	cases := []struct {
-		name                     string
-		wantValidateMachineErr   string
-		wantCreateVMErr          string
-		wantCreateServiceErr     string
-		ClientCreateVMError      error
-		ClientCreateServiceError error
-		labels                   map[string]string
-		providerID               string
-		wantVMToBeReady          bool
+		name                                string
+		wantValidateMachineErr              string
+		wantCreateVMErr                     string
+		wantCreateServiceErr                string
+		ClientCreateVMError                 error
+		ClientCreateServiceError            error
+		labels                              map[string]string
+		providerID                          string
+		wantVMToBeReady                     bool
+		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
 			name:                     "Create a VM",
@@ -52,6 +53,18 @@ func TestCreate(t *testing.T) {
 			wantVMToBeReady:          true,
 			wantCreateServiceErr:     "",
 			ClientCreateServiceError: nil,
+		},
+		{
+			name:                                "Create a VM with default UnderKubeconfigSecretName",
+			wantValidateMachineErr:              "",
+			wantCreateVMErr:                     "",
+			ClientCreateVMError:                 nil,
+			labels:                              nil,
+			providerID:                          "",
+			wantVMToBeReady:                     true,
+			wantCreateServiceErr:                "",
+			ClientCreateServiceError:            nil,
+			useDefaultUnderKubeconfigSecretName: true,
 		},
 		{
 			name:                     "Create a VM but fail on create a sevice",
@@ -89,7 +102,7 @@ func TestCreate(t *testing.T) {
 			defer mockCtrl.Finish()
 			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
 			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
-			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID, tc.useDefaultUnderKubeconfigSecretName)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
@@ -142,19 +155,20 @@ func TestCreate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
-		name                     string
-		wantValidateMachineErr   string
-		wantGetVMErr             string
-		wantDeleteVMErr          string
-		wantGetServiceErr        string
-		wantDeleteServiceErr     string
-		clientGetVMError         error
-		clientDeleteVMError      error
-		ClientDeleteServiceError error
-		ClientGetServiceError    error
-		emptyGetVM               bool
-		labels                   map[string]string
-		providerID               string
+		name                                string
+		wantValidateMachineErr              string
+		wantGetVMErr                        string
+		wantDeleteVMErr                     string
+		wantGetServiceErr                   string
+		wantDeleteServiceErr                string
+		clientGetVMError                    error
+		clientDeleteVMError                 error
+		ClientDeleteServiceError            error
+		ClientGetServiceError               error
+		emptyGetVM                          bool
+		labels                              map[string]string
+		providerID                          string
+		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
 			name:                     "Delete a VM successfully",
@@ -170,6 +184,22 @@ func TestDelete(t *testing.T) {
 			wantGetServiceErr:        "",
 			ClientDeleteServiceError: nil,
 			ClientGetServiceError:    nil,
+		},
+		{
+			name:                                "Delete a VM successfully with default UnderKubeconfigSecretName",
+			wantValidateMachineErr:              "",
+			wantGetVMErr:                        "",
+			clientGetVMError:                    nil,
+			wantDeleteVMErr:                     "",
+			clientDeleteVMError:                 nil,
+			emptyGetVM:                          false,
+			labels:                              nil,
+			providerID:                          "",
+			wantDeleteServiceErr:                "",
+			wantGetServiceErr:                   "",
+			ClientDeleteServiceError:            nil,
+			ClientGetServiceError:               nil,
+			useDefaultUnderKubeconfigSecretName: true,
 		},
 		{
 			name:                     "Delete a VM successfully but fail on get service",
@@ -253,7 +283,7 @@ func TestDelete(t *testing.T) {
 			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
 			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
 
-			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID, tc.useDefaultUnderKubeconfigSecretName)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
@@ -323,12 +353,13 @@ func TestDelete(t *testing.T) {
 func TestExists(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
-		name           string
-		clientGetError error
-		emptyGetVM     bool
-		isExist        bool
-		labels         map[string]string
-		providerID     string
+		name                                string
+		clientGetError                      error
+		emptyGetVM                          bool
+		isExist                             bool
+		labels                              map[string]string
+		providerID                          string
+		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
 			name:           "Validate existence VM",
@@ -337,6 +368,15 @@ func TestExists(t *testing.T) {
 			isExist:        true,
 			labels:         nil,
 			providerID:     "",
+		},
+		{
+			name:                                "Validate existence VM with default UnderKubeconfigSecretName",
+			clientGetError:                      nil,
+			emptyGetVM:                          false,
+			isExist:                             true,
+			labels:                              nil,
+			providerID:                          "",
+			useDefaultUnderKubeconfigSecretName: true,
 		},
 		{
 			name:           "Validate non existence VM",
@@ -362,7 +402,7 @@ func TestExists(t *testing.T) {
 			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
 			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
 
-			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID, tc.useDefaultUnderKubeconfigSecretName)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}
@@ -409,19 +449,20 @@ func TestExists(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	// TODO add a case of setProviderID and setMachineAnnotationsAndLabels failure
 	cases := []struct {
-		name                     string
-		wantValidateMachineErr   string
-		wantUpdateVMErr          string
-		wantCreateServiceErr     string
-		wantGetServiceErr        string
-		clientGetVMError         error
-		clientUpdateVMError      error
-		clientCreateServiceError error
-		clientGetServiceError    error
-		emptyGetVM               bool
-		labels                   map[string]string
-		providerID               string
-		wantVMToBeReady          bool
+		name                                string
+		wantValidateMachineErr              string
+		wantUpdateVMErr                     string
+		wantCreateServiceErr                string
+		wantGetServiceErr                   string
+		clientGetVMError                    error
+		clientUpdateVMError                 error
+		clientCreateServiceError            error
+		clientGetServiceError               error
+		emptyGetVM                          bool
+		labels                              map[string]string
+		providerID                          string
+		wantVMToBeReady                     bool
+		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
 			name:                   "Update a VM and create a service",
@@ -435,6 +476,20 @@ func TestUpdate(t *testing.T) {
 			wantVMToBeReady:        true,
 			wantGetServiceErr:      "service not found",
 			clientGetServiceError:  errors.New("service not found"),
+		},
+		{
+			name:                                "Update a VM and create a service, use default UnderKubeconfigSecretName",
+			wantValidateMachineErr:              "",
+			wantUpdateVMErr:                     "",
+			clientGetVMError:                    nil,
+			clientUpdateVMError:                 nil,
+			emptyGetVM:                          false,
+			labels:                              nil,
+			providerID:                          fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
+			wantVMToBeReady:                     true,
+			wantGetServiceErr:                   "service not found",
+			clientGetServiceError:               errors.New("service not found"),
+			useDefaultUnderKubeconfigSecretName: true,
 		},
 		{
 			name:                   "Update a VM but fail on get service",
@@ -528,7 +583,7 @@ func TestUpdate(t *testing.T) {
 			mockUnderkube := mockunderkube.NewMockClient(mockCtrl)
 			mockOvernderkube := mockoverkube.NewMockClient(mockCtrl)
 
-			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID)
+			machine := initializeMachine(t, mockUnderkube, tc.labels, tc.providerID, tc.useDefaultUnderKubeconfigSecretName)
 			if machine == nil {
 				t.Fatalf("Unable to create the stub machine object")
 			}

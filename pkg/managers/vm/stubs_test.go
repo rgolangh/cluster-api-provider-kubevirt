@@ -188,13 +188,16 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 
 	return &virtualMachine
 }
-func stubMachine(labels map[string]string, providerID string) (*machinev1.Machine, error) {
-
-	providerSpecValue, providerSpecValueErr := kubevirtproviderv1alpha1.RawExtensionFromProviderSpec(&kubevirtproviderv1alpha1.KubevirtMachineProviderSpec{
+func stubMachine(labels map[string]string, providerID string, useDefaultUnderKubeconfigSecretName bool) (*machinev1.Machine, error) {
+	kubevirtMachineProviderSpec := &kubevirtproviderv1alpha1.KubevirtMachineProviderSpec{
 		SourcePvcName:             SourceTestPvcName,
 		IgnitionSecretName:        workerUserDataSecretName,
 		UnderKubeconfigSecretName: workerUserDataSecretName,
-	})
+	}
+	if useDefaultUnderKubeconfigSecretName {
+		kubevirtMachineProviderSpec.UnderKubeconfigSecretName = ""
+	}
+	providerSpecValue, providerSpecValueErr := kubevirtproviderv1alpha1.RawExtensionFromProviderSpec(kubevirtMachineProviderSpec)
 
 	if labels == nil {
 		labels = map[string]string{
