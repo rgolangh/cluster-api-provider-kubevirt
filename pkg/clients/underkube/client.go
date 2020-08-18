@@ -33,7 +33,9 @@ import (
 
 const (
 	// underKubeConfig is secret key containing kubeconfig content of the UnderKube
-	underKubeConfig = "kubeconfig"
+	underKubeConfig                       = "kubeconfig"
+	defaultUnderKubeconfigSecretName      = "kubevirt-credentials"
+	defaultUnderKubeconfigSecretNamespace = "openshift-machine-api"
 )
 
 // ClientBuilderFuncType is function type for building underkube client
@@ -64,18 +66,20 @@ type client struct {
 
 // New creates our client wrapper object for the actual kubeVirt and kubernetes clients we use.
 func New(overKubernetesClient overkube.Client, underKubeconfigSecretName, namespace string) (Client, error) {
+	underKubeconfigSecretNamespace := namespace
 	if underKubeconfigSecretName == "" {
-		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty UnderKubeconfigSecretName")
+		underKubeconfigSecretName = defaultUnderKubeconfigSecretName
+		underKubeconfigSecretNamespace = defaultUnderKubeconfigSecretNamespace
 	}
 
 	if namespace == "" {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty namespace")
 	}
 
-	returnedSecret, err := overKubernetesClient.GetSecret(underKubeconfigSecretName, namespace)
+	returnedSecret, err := overKubernetesClient.GetSecret(underKubeconfigSecretName, underKubeconfigSecretNamespace)
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
-			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", namespace, underKubeconfigSecretName, err)
+			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", underKubeconfigSecretNamespace, underKubeconfigSecretName, err)
 		}
 		return nil, err
 	}

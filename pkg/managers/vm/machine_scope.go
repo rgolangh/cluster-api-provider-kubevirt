@@ -92,8 +92,6 @@ func (s *machineScope) assertMandatoryParams() error {
 	switch {
 	case s.machineProviderSpec.SourcePvcName == "":
 		return machinecontroller.InvalidMachineConfiguration("%v: missing value for SourcePvcName", s.machine.GetName())
-	case s.machineProviderSpec.UnderKubeconfigSecretName == "":
-		return machinecontroller.InvalidMachineConfiguration("%v: missing value for UnderKubeconfigSecretName", s.machine.GetName())
 	case s.machineProviderSpec.IgnitionSecretName == "":
 		return machinecontroller.InvalidMachineConfiguration("%v: missing value for IgnitionSecretName", s.machine.GetName())
 	default:
