@@ -94,6 +94,8 @@ func (s *machineScope) assertMandatoryParams() error {
 		return machinecontroller.InvalidMachineConfiguration("%v: missing value for SourcePvcName", s.machine.GetName())
 	case s.machineProviderSpec.IgnitionSecretName == "":
 		return machinecontroller.InvalidMachineConfiguration("%v: missing value for IgnitionSecretName", s.machine.GetName())
+	case s.machineProviderSpec.NetworkName == "":
+		return machinecontroller.InvalidMachineConfiguration("%v: missing value for NetworkName", s.machine.GetName())
 	default:
 		return nil
 	}
@@ -227,6 +229,15 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 			},
 		},
 	}
+	multusNetwork := &kubevirtapiv1.MultusNetwork{
+		NetworkName: s.machineProviderSpec.NetworkName,
+	}
+	template.Spec.Networks = []kubevirtapiv1.Network{{
+		Name: "main",
+		NetworkSource: kubevirtapiv1.NetworkSource{
+			Multus: multusNetwork,
+		},
+	}}
 
 	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
 
@@ -265,6 +276,12 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 				},
 			},
 		},
+		Interfaces: []kubevirtapiv1.Interface{{
+			Name: "main",
+			InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
+				Bridge: &kubevirtapiv1.InterfaceBridge{},
+			},
+		}},
 	}
 
 	return template, nil

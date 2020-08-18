@@ -34,6 +34,7 @@ type KubevirtMachineProviderSpec struct {
 	RequestedStorage          string `json:"requestedStorage,omitempty"`
 	StorageClassName          string `json:"storageClassName,omitempty"`
 	IgnitionSecretName        string `json:"ignitionSecretName,omitempty"`
+	NetworkName               string `json:"networkName,omitempty"`
 }
 
 // KubevirtMachineProviderStatus is the type that will be embedded in a Machine.Status.ProviderStatus field.

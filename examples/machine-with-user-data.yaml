@@ -26,4 +26,5 @@ spec:
       MachineType: ""
       StorageClassName: ""
       IgnitionSecretName: "worker-user-data"
+      NetworkName: "multus-network-name"
 

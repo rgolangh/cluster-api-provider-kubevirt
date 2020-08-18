@@ -119,6 +119,16 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 		},
 	}
 
+	multusNetwork := &kubevirtapiv1.MultusNetwork{
+		NetworkName: s.machineProviderSpec.NetworkName,
+	}
+	template.Spec.Networks = []kubevirtapiv1.Network{{
+		Name: "main",
+		NetworkSource: kubevirtapiv1.NetworkSource{
+			Multus: multusNetwork,
+		},
+	}}
+
 	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
 
 	requests := corev1.ResourceList{}
@@ -155,6 +165,12 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 				},
 			},
 		},
+		Interfaces: []kubevirtapiv1.Interface{{
+			Name: "main",
+			InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
+				Bridge: &kubevirtapiv1.InterfaceBridge{},
+			},
+		}},
 	}
 
 	return template
