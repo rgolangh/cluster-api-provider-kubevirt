@@ -67,7 +67,7 @@ replace (
 // and
 // github.com/openshift/machine-api-operator v0.2.1-0.20200402110321-4f3602b96da3 (throgh its import github.com/openshift/client-go)
 // requires k8s-* v0.18.2
-// but we are pinned to overkube-1.16.4 as for underkube.io/underkube v0.29.1 while we explicitly
+// but we are pinned to kubernetes-1.16.4 as for kubevirt.io/kubevirt v0.29.1 while we explicitly
 // need github.com/operator-framework/api v0.3.5
 replace (
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240

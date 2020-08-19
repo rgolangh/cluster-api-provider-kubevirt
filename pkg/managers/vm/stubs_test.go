@@ -13,8 +13,8 @@ import (
 
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 
 	kubevirtproviderv1alpha1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
@@ -48,7 +48,7 @@ func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineIns
 	return &vmi, nil
 }
 
-func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
+func stubMachineScope(machine *machinev1.Machine, tenantClusterClient tenantcluster.Client, infraClusterClientBuilder infracluster.ClientBuilderFuncType) (*machineScope, error) {
 	providerSpec, err := kubevirtproviderv1alpha1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine config: %v", err)
@@ -59,14 +59,14 @@ func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
+	infraClusterClient, err := infraClusterClientBuilder(tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
 	return &machineScope{
-		underkubeClient:       kubevirtClient,
-		overkubeClient:        overkubeClient,
+		infraClusterClient:    infraClusterClient,
+		tenantClusterClient:   tenantClusterClient,
 		machine:               machine,
 		originMachineCopy:     machine.DeepCopy(),
 		machineProviderSpec:   providerSpec,

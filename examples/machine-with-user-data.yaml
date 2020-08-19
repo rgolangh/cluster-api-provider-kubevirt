@@ -18,7 +18,7 @@ spec:
       # TODO: determine the version : apiVersion: kubevirtproviderconfig.openshift.io/v1beta1
       kind: KubevirtMachineProviderSpec
       # optional paramters, the default value is kubevirt-credentials in namespace openshift-machine-api
-      CredentialsSecretName: underkube-config
+      CredentialsSecretName: infracluster-config
       SourcePvcName: pvc-rhcos-image
       RequestedMemory: "2048M"
       RequestedCPU: 2

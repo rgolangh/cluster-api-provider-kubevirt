@@ -9,8 +9,8 @@ import (
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
 	kubevirtproviderv1alpha1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
@@ -44,15 +44,15 @@ const (
 )
 
 type machineScope struct {
-	underkubeClient       underkube.Client
-	overkubeClient        overkube.Client
+	infraClusterClient    infracluster.Client
+	tenantClusterClient   tenantcluster.Client
 	machine               *machinev1.Machine
 	originMachineCopy     *machinev1.Machine
 	machineProviderSpec   *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
 	machineProviderStatus *kubevirtproviderv1alpha1.KubevirtMachineProviderStatus
 }
 
-func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
+func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantcluster.Client, infraClusterClientBuilder infracluster.ClientBuilderFuncType) (*machineScope, error) {
 	if err := validateMachine(*machine); err != nil {
 		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), err)
 	}
@@ -67,14 +67,14 @@ func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client,
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
+	infraClusterClient, err := infraClusterClientBuilder(tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
 	return &machineScope{
-		underkubeClient:       kubevirtClient,
-		overkubeClient:        overkubeClient,
+		infraClusterClient:    infraClusterClient,
+		tenantClusterClient:   tenantClusterClient,
 		machine:               machine,
 		originMachineCopy:     machine.DeepCopy(),
 		machineProviderSpec:   providerSpec,
@@ -289,16 +289,16 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 
 func (s *machineScope) getUserData(namespace string) (string, error) {
 	secretName := s.machineProviderSpec.IgnitionSecretName
-	userDataSecret, err := s.overkubeClient.GetSecret(secretName, s.machine.GetNamespace())
+	userDataSecret, err := s.tenantClusterClient.GetSecret(secretName, s.machine.GetNamespace())
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
-			return "", machinecontroller.InvalidMachineConfiguration("Overkube credentials secret %s/%s: %v not found", namespace, secretName, err)
+			return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v not found", namespace, secretName, err)
 		}
 		return "", err
 	}
 	userDataByte, ok := userDataSecret.Data[userDataKey]
 	if !ok {
-		return "", machinecontroller.InvalidMachineConfiguration("Overkube credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
+		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
 	}
 	userData := string(userDataByte)
 	return userData, nil
@@ -402,7 +402,7 @@ func (s *machineScope) patchMachine() error {
 
 	// patch machine
 	statusCopy := *s.machine.Status.DeepCopy()
-	if err := s.overkubeClient.PatchMachine(s.machine, s.originMachineCopy); err != nil {
+	if err := s.tenantClusterClient.PatchMachine(s.machine, s.originMachineCopy); err != nil {
 		klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
 		return err
 	}
@@ -410,7 +410,7 @@ func (s *machineScope) patchMachine() error {
 	s.machine.Status = statusCopy
 
 	// patch status
-	if err := s.overkubeClient.StatusPatchMachine(s.machine, s.originMachineCopy); err != nil {
+	if err := s.tenantClusterClient.StatusPatchMachine(s.machine, s.originMachineCopy); err != nil {
 		klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
 		return err
 	}

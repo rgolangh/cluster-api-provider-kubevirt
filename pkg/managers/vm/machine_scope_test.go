@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-const testNamespace = "underkube-test"
+const testNamespace = "infraCluster-test"
 
 func TestGetUserData(t *testing.T) {
 

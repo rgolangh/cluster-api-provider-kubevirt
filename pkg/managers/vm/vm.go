@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
@@ -30,24 +30,24 @@ type ProviderVM interface {
 }
 
 // manager is the struct which implement ProviderVM interface
-// Use overkubeClient to access secret params assigned by user
-// Use underkubeClientBuilder to create the kubevirt kubernetes used
+// Use tenantClusterClient to access secret params assigned by user
+// Use infraClusterClientBuilder to create the infra cluster vms
 type manager struct {
-	underkubeClientBuilder underkube.ClientBuilderFuncType
-	overkubeClient         overkube.Client
+	infraClusterClientBuilder infracluster.ClientBuilderFuncType
+	tenantClusterClient       tenantcluster.Client
 }
 
 // New creates provider vm instance
-func New(underkubeClientBuilder underkube.ClientBuilderFuncType, overkubeClient overkube.Client) ProviderVM {
+func New(infraClusterClientBuilder infracluster.ClientBuilderFuncType, tenantClusterClient tenantcluster.Client) ProviderVM {
 	return &manager{
-		overkubeClient:         overkubeClient,
-		underkubeClientBuilder: underkubeClientBuilder,
+		tenantClusterClient:       tenantClusterClient,
+		infraClusterClientBuilder: infraClusterClientBuilder,
 	}
 }
 
 // Create creates machine if it does not exists.
 func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
-	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
+	machineScope, err := newMachineScope(machine, m.tenantClusterClient, m.infraClusterClientBuilder)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 		}
 	}()
 
-	createdVM, err := m.createUnderkubeVM(virtualMachineFromMachine, machineScope)
+	createdVM, err := m.createInfraClusterVM(virtualMachineFromMachine, machineScope)
 
 	if err != nil {
 		klog.Errorf("%s: error creating machine: %v", machineScope.getMachineName(), err)
@@ -88,7 +88,7 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 
 // delete deletes machine
 func (m *manager) Delete(machine *machinev1.Machine) error {
-	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
+	machineScope, err := newMachineScope(machine, m.tenantClusterClient, m.infraClusterClientBuilder)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 
 	klog.Infof("%s: delete machine", machineScope.getMachineName())
 
-	existingVM, err := m.getUnderkubeVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
+	existingVM, err := m.getInraClusterVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
 	if err != nil {
 		// TODO ask Nir how to check it
 		if strings.Contains(err.Error(), "not found") {
@@ -117,7 +117,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 		return nil
 	}
 
-	if err := m.deleteUnderkubeVM(existingVM.GetName(), existingVM.GetNamespace(), machineScope); err != nil {
+	if err := m.deleteInraClusterVM(existingVM.GetName(), existingVM.GetNamespace(), machineScope); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
 
@@ -128,7 +128,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 
 // update finds a vm and reconciles the machine resource status against it.
 func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr error) {
-	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
+	machineScope, err := newMachineScope(machine, m.tenantClusterClient, m.infraClusterClientBuilder)
 	if err != nil {
 		return false, err
 	}
@@ -161,7 +161,7 @@ func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr
 }
 
 func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (bool, *kubevirtapiv1.VirtualMachine, error) {
-	existingVM, err := m.getUnderkubeVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
+	existingVM, err := m.getInraClusterVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
 	if err != nil {
 		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), err)
 		return false, nil, err
@@ -187,7 +187,7 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 		Ready:   existingVM.Status.Ready,
 	}
 
-	updatedVM, err := m.updateUnderkubeVM(virtualMachineFromMachine, machineScope)
+	updatedVM, err := m.updateInraClusterVM(virtualMachineFromMachine, machineScope)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to update VM: %w", err)
 	}
@@ -200,7 +200,7 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 }
 
 func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope *machineScope) error {
-	vmi, err := m.getUnderkubeVMI(vm.Name, vm.Namespace, machineScope)
+	vmi, err := m.getInraClusterVMI(vm.Name, vm.Namespace, machineScope)
 	if err != nil {
 		klog.Errorf("%s: error getting vmi for machine: %v", machineScope.getMachineName(), err)
 	}
@@ -213,13 +213,13 @@ func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope *ma
 
 // exists returns true if machine exists.
 func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
-	machineScope, err := newMachineScope(machine, m.overkubeClient, m.underkubeClientBuilder)
+	machineScope, err := newMachineScope(machine, m.tenantClusterClient, m.infraClusterClientBuilder)
 	if err != nil {
 		return false, err
 	}
 
 	klog.Infof("%s: check if machine exists", machineScope.getMachineName())
-	existingVM, err := m.getUnderkubeVM(machine.GetName(), getVMNamespace(machine), machineScope)
+	existingVM, err := m.getInraClusterVM(machine.GetName(), getVMNamespace(machine), machineScope)
 	if err != nil {
 		// TODO ask Nir how to check it
 		if strings.Contains(err.Error(), "not found") {
@@ -238,24 +238,24 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 	return true, nil
 }
 
-func (m *manager) createUnderkubeVM(virtualMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.underkubeClient.CreateVirtualMachine(virtualMachine.Namespace, virtualMachine)
+func (m *manager) createInfraClusterVM(virtualMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
+	return machineScope.infraClusterClient.CreateVirtualMachine(virtualMachine.Namespace, virtualMachine)
 }
 
-func (m *manager) getUnderkubeVM(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.underkubeClient.GetVirtualMachine(vmNamespace, vmName, &k8smetav1.GetOptions{})
+func (m *manager) getInraClusterVM(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
+	return machineScope.infraClusterClient.GetVirtualMachine(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
-func (m *manager) getUnderkubeVMI(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachineInstance, error) {
-	return machineScope.underkubeClient.GetVirtualMachineInstance(vmNamespace, vmName, &k8smetav1.GetOptions{})
+func (m *manager) getInraClusterVMI(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachineInstance, error) {
+	return machineScope.infraClusterClient.GetVirtualMachineInstance(vmNamespace, vmName, &k8smetav1.GetOptions{})
 }
 
-func (m *manager) deleteUnderkubeVM(vmName, vmNamespace string, machineScope *machineScope) error {
+func (m *manager) deleteInraClusterVM(vmName, vmNamespace string, machineScope *machineScope) error {
 	gracePeriod := int64(10)
-	return machineScope.underkubeClient.DeleteVirtualMachine(vmNamespace, vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
+	return machineScope.infraClusterClient.DeleteVirtualMachine(vmNamespace, vmName, &k8smetav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
 }
 
-func (m *manager) updateUnderkubeVM(updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
-	return machineScope.underkubeClient.UpdateVirtualMachine(updatedVM.Namespace, updatedVM)
+func (m *manager) updateInraClusterVM(updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
+	return machineScope.infraClusterClient.UpdateVirtualMachine(updatedVM.Namespace, updatedVM)
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane

@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package underkube
+package infracluster
 
 import (
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
+	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,16 +31,16 @@ import (
 //go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 
 const (
-	// platformCredentialsKey is secret key containing kubeconfig content of the UnderKube
+	// platformCredentialsKey is secret key containing kubeconfig content of the infra-cluster
 	platformCredentialsKey                  = "kubeconfig"
 	defaultCredentialsSecretSecretName      = "kubevirt-credentials"
 	defaultCredentialsSecretSecretNamespace = "openshift-machine-api"
 )
 
-// ClientBuilderFuncType is function type for building underkube client
-type ClientBuilderFuncType func(overKubernetesClient overkube.Client, CredentialsSecretSecretName, namespace string) (Client, error)
+// ClientBuilderFuncType is function type for building infra-cluster clients
+type ClientBuilderFuncType func(tenantClusterKubernetesClient tenantcluster.Client, CredentialsSecretSecretName, namespace string) (Client, error)
 
-// Client is a wrapper object for actual underkube clients: kubernetes and the kubevirt
+// Client is a wrapper object for actual infra-cluster clients: kubernetes and the kubevirt
 type Client interface {
 	CreateVirtualMachine(namespace string, newVM *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error)
 	DeleteVirtualMachine(namespace string, name string, options *k8smetav1.DeleteOptions) error
@@ -60,7 +60,7 @@ type client struct {
 }
 
 // New creates our client wrapper object for the actual kubeVirt and kubernetes clients we use.
-func New(overKubernetesClient overkube.Client, CredentialsSecretSecretName, namespace string) (Client, error) {
+func New(tenantClusterKubernetesClient tenantcluster.Client, CredentialsSecretSecretName, namespace string) (Client, error) {
 	CredentialsSecretSecretNamespace := namespace
 	if CredentialsSecretSecretName == "" {
 		CredentialsSecretSecretName = defaultCredentialsSecretSecretName
@@ -68,19 +68,19 @@ func New(overKubernetesClient overkube.Client, CredentialsSecretSecretName, name
 	}
 
 	if namespace == "" {
-		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty namespace")
+		return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret - Invalid empty namespace")
 	}
 
-	returnedSecret, err := overKubernetesClient.GetSecret(CredentialsSecretSecretName, CredentialsSecretSecretNamespace)
+	returnedSecret, err := tenantClusterKubernetesClient.GetSecret(CredentialsSecretSecretName, CredentialsSecretSecretNamespace)
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
-			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", CredentialsSecretSecretNamespace, CredentialsSecretSecretName, err)
+			return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret %s/%s: %v not found", CredentialsSecretSecretNamespace, CredentialsSecretSecretName, err)
 		}
 		return nil, err
 	}
 	platformCredentials, ok := returnedSecret.Data[platformCredentialsKey]
 	if !ok {
-		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %v did not contain key %v",
+		return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret %v did not contain key %v",
 			CredentialsSecretSecretName, platformCredentials)
 	}
 
