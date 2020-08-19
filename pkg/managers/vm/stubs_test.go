@@ -29,6 +29,7 @@ const (
 	userDataValue            = "123"
 	workerUserDataSecretName = "worker-user-data"
 	SourceTestPvcName        = "SourceTestPvcName"
+	NetworkName              = "multus-network"
 )
 
 func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineInstance, error) {
@@ -47,15 +48,6 @@ func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineIns
 	return &vmi, nil
 }
 
-func stubService(vmName string) *corev1.Service {
-	service := &corev1.Service{}
-	service.Name = vmName
-	service.Spec = corev1.ServiceSpec{
-		ClusterIP: "",
-		Selector:  map[string]string{"name": "worker-" + vmName},
-	}
-	return service
-}
 func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
 	providerSpec, err := kubevirtproviderv1alpha1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {
@@ -209,6 +201,7 @@ func stubMachine(labels map[string]string, providerID string, useDefaultUnderKub
 		SourcePvcName:             SourceTestPvcName,
 		IgnitionSecretName:        workerUserDataSecretName,
 		UnderKubeconfigSecretName: workerUserDataSecretName,
+		NetworkName:               NetworkName,
 	}
 	if useDefaultUnderKubeconfigSecretName {
 		kubevirtMachineProviderSpec.UnderKubeconfigSecretName = ""

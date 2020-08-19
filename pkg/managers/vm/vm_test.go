@@ -35,24 +35,20 @@ func TestCreate(t *testing.T) {
 		name                                string
 		wantValidateMachineErr              string
 		wantCreateVMErr                     string
-		wantCreateServiceErr                string
 		ClientCreateVMError                 error
-		ClientCreateServiceError            error
 		labels                              map[string]string
 		providerID                          string
 		wantVMToBeReady                     bool
 		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
-			name:                     "Create a VM",
-			wantValidateMachineErr:   "",
-			wantCreateVMErr:          "",
-			ClientCreateVMError:      nil,
-			labels:                   nil,
-			providerID:               "",
-			wantVMToBeReady:          true,
-			wantCreateServiceErr:     "",
-			ClientCreateServiceError: nil,
+			name:                   "Create a VM",
+			wantValidateMachineErr: "",
+			wantCreateVMErr:        "",
+			ClientCreateVMError:    nil,
+			labels:                 nil,
+			providerID:             "",
+			wantVMToBeReady:        true,
 		},
 		{
 			name:                                "Create a VM with default UnderKubeconfigSecretName",
@@ -62,20 +58,7 @@ func TestCreate(t *testing.T) {
 			labels:                              nil,
 			providerID:                          "",
 			wantVMToBeReady:                     true,
-			wantCreateServiceErr:                "",
-			ClientCreateServiceError:            nil,
 			useDefaultUnderKubeconfigSecretName: true,
-		},
-		{
-			name:                     "Create a VM but fail on create a sevice",
-			wantValidateMachineErr:   "",
-			wantCreateVMErr:          "",
-			ClientCreateVMError:      nil,
-			labels:                   nil,
-			providerID:               "",
-			wantVMToBeReady:          true,
-			wantCreateServiceErr:     "failed to create service: client error",
-			ClientCreateServiceError: errors.New("client error"),
 		},
 		{
 			name:                   "Create a VM from unlabeled machine and fail",
@@ -126,12 +109,6 @@ func TestCreate(t *testing.T) {
 			mockUnderkube.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
-			if tc.wantCreateServiceErr == "" {
-				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(stubService(virtualMachine.Name), nil).AnyTimes()
-			} else {
-				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(nil, tc.ClientCreateServiceError).AnyTimes()
-			}
-
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
@@ -142,8 +119,6 @@ func TestCreate(t *testing.T) {
 				assert.Equal(t, tc.wantValidateMachineErr, err.Error())
 			} else if tc.wantCreateVMErr != "" {
 				assert.Equal(t, tc.wantCreateVMErr, err.Error())
-			} else if tc.wantCreateServiceErr != "" {
-				assert.Equal(t, tc.wantCreateServiceErr, err.Error())
 			} else {
 				assert.Equal(t, err, nil)
 			}
@@ -159,31 +134,23 @@ func TestDelete(t *testing.T) {
 		wantValidateMachineErr              string
 		wantGetVMErr                        string
 		wantDeleteVMErr                     string
-		wantGetServiceErr                   string
-		wantDeleteServiceErr                string
 		clientGetVMError                    error
 		clientDeleteVMError                 error
-		ClientDeleteServiceError            error
-		ClientGetServiceError               error
 		emptyGetVM                          bool
 		labels                              map[string]string
 		providerID                          string
 		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
-			name:                     "Delete a VM successfully",
-			wantValidateMachineErr:   "",
-			wantGetVMErr:             "",
-			clientGetVMError:         nil,
-			wantDeleteVMErr:          "",
-			clientDeleteVMError:      nil,
-			emptyGetVM:               false,
-			labels:                   nil,
-			providerID:               "",
-			wantDeleteServiceErr:     "",
-			wantGetServiceErr:        "",
-			ClientDeleteServiceError: nil,
-			ClientGetServiceError:    nil,
+			name:                   "Delete a VM successfully",
+			wantValidateMachineErr: "",
+			wantGetVMErr:           "",
+			clientGetVMError:       nil,
+			wantDeleteVMErr:        "",
+			clientDeleteVMError:    nil,
+			emptyGetVM:             false,
+			labels:                 nil,
+			providerID:             "",
 		},
 		{
 			name:                                "Delete a VM successfully with default UnderKubeconfigSecretName",
@@ -195,41 +162,7 @@ func TestDelete(t *testing.T) {
 			emptyGetVM:                          false,
 			labels:                              nil,
 			providerID:                          "",
-			wantDeleteServiceErr:                "",
-			wantGetServiceErr:                   "",
-			ClientDeleteServiceError:            nil,
-			ClientGetServiceError:               nil,
 			useDefaultUnderKubeconfigSecretName: true,
-		},
-		{
-			name:                     "Delete a VM successfully but fail on get service",
-			wantValidateMachineErr:   "",
-			wantGetVMErr:             "",
-			clientGetVMError:         nil,
-			wantDeleteVMErr:          "",
-			clientDeleteVMError:      nil,
-			emptyGetVM:               false,
-			labels:                   nil,
-			providerID:               "",
-			wantDeleteServiceErr:     "",
-			wantGetServiceErr:        "failed to delete the service of VM: client error",
-			ClientDeleteServiceError: nil,
-			ClientGetServiceError:    errors.New("client error"),
-		},
-		{
-			name:                     "Delete a VM successfully but fail on delete service",
-			wantValidateMachineErr:   "",
-			wantGetVMErr:             "",
-			clientGetVMError:         nil,
-			wantDeleteVMErr:          "",
-			clientDeleteVMError:      nil,
-			emptyGetVM:               false,
-			labels:                   nil,
-			providerID:               "",
-			wantDeleteServiceErr:     "failed to delete the service of VM: client error",
-			wantGetServiceErr:        "",
-			ClientDeleteServiceError: errors.New("client error"),
-			ClientGetServiceError:    nil,
 		},
 		{
 			name:                   "Delete a VM from unlabeled machine and fail",
@@ -310,17 +243,6 @@ func TestDelete(t *testing.T) {
 			mockUnderkube.EXPECT().DeleteVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
-			if tc.wantGetServiceErr == "" {
-				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
-			} else {
-				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(nil, tc.ClientGetServiceError).AnyTimes()
-			}
-			if tc.wantDeleteServiceErr == "" {
-				mockUnderkube.EXPECT().DeleteService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(nil).AnyTimes()
-			} else {
-				mockUnderkube.EXPECT().DeleteService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(tc.ClientDeleteServiceError).AnyTimes()
-			}
-
 			//overkube mocks
 			// TODO: test negative flow, return err != nil
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
@@ -338,10 +260,6 @@ func TestDelete(t *testing.T) {
 				assert.Equal(t, tc.wantGetVMErr, err.Error())
 			} else if tc.wantDeleteVMErr != "" {
 				assert.Equal(t, tc.wantDeleteVMErr, err.Error())
-			} else if tc.wantGetServiceErr != "" {
-				assert.Equal(t, tc.wantGetServiceErr, err.Error())
-			} else if tc.wantDeleteServiceErr != "" {
-				assert.Equal(t, tc.wantDeleteServiceErr, err.Error())
 			} else {
 				assert.Equal(t, err, nil)
 			}
@@ -452,12 +370,8 @@ func TestUpdate(t *testing.T) {
 		name                                string
 		wantValidateMachineErr              string
 		wantUpdateVMErr                     string
-		wantCreateServiceErr                string
-		wantGetServiceErr                   string
 		clientGetVMError                    error
 		clientUpdateVMError                 error
-		clientCreateServiceError            error
-		clientGetServiceError               error
 		emptyGetVM                          bool
 		labels                              map[string]string
 		providerID                          string
@@ -465,7 +379,7 @@ func TestUpdate(t *testing.T) {
 		useDefaultUnderKubeconfigSecretName bool
 	}{
 		{
-			name:                   "Update a VM and create a service",
+			name:                   "Update a VM",
 			wantValidateMachineErr: "",
 			wantUpdateVMErr:        "",
 			clientGetVMError:       nil,
@@ -474,11 +388,9 @@ func TestUpdate(t *testing.T) {
 			labels:                 nil,
 			providerID:             fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
 			wantVMToBeReady:        true,
-			wantGetServiceErr:      "service not found",
-			clientGetServiceError:  errors.New("service not found"),
 		},
 		{
-			name:                                "Update a VM and create a service, use default UnderKubeconfigSecretName",
+			name:                                "Update a VM, use default UnderKubeconfigSecretName",
 			wantValidateMachineErr:              "",
 			wantUpdateVMErr:                     "",
 			clientGetVMError:                    nil,
@@ -487,37 +399,7 @@ func TestUpdate(t *testing.T) {
 			labels:                              nil,
 			providerID:                          fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
 			wantVMToBeReady:                     true,
-			wantGetServiceErr:                   "service not found",
-			clientGetServiceError:               errors.New("service not found"),
 			useDefaultUnderKubeconfigSecretName: true,
-		},
-		{
-			name:                   "Update a VM but fail on get service",
-			wantValidateMachineErr: "",
-			wantUpdateVMErr:        "",
-			clientGetVMError:       nil,
-			clientUpdateVMError:    nil,
-			emptyGetVM:             false,
-			labels:                 nil,
-			providerID:             fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
-			wantVMToBeReady:        true,
-			wantGetServiceErr:      "machine-test: error getting service of VM: client error",
-			clientGetServiceError:  errors.New("client error"),
-		},
-		{
-			name:                     "Update a VM but fail on create service",
-			wantValidateMachineErr:   "",
-			wantUpdateVMErr:          "",
-			clientGetVMError:         nil,
-			clientUpdateVMError:      nil,
-			emptyGetVM:               false,
-			labels:                   nil,
-			providerID:               fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
-			wantVMToBeReady:          true,
-			wantCreateServiceErr:     "failed to create service: client error",
-			clientCreateServiceError: errors.New("client error"),
-			wantGetServiceErr:        "service not found",
-			clientGetServiceError:    errors.New("service not found"),
 		},
 		// TODO: enable that test after pushing the PR: https://github.com/kubevirt/kubevirt/pull/3889 so update wouldn't override the vm Status
 		//{
@@ -622,18 +504,6 @@ func TestUpdate(t *testing.T) {
 			mockUnderkube.EXPECT().UpdateVirtualMachine(clusterID, getReturnVM).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
 			mockUnderkube.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
-			if tc.wantGetServiceErr == "" {
-				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(stubService(virtualMachine.Name), nil).AnyTimes()
-			} else {
-				mockUnderkube.EXPECT().GetService(virtualMachine.Name, virtualMachine.Namespace, gomock.Any()).Return(nil, tc.clientGetServiceError).AnyTimes()
-			}
-			if tc.wantCreateServiceErr == "" {
-				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(stubService(virtualMachine.Name), nil).AnyTimes()
-
-			} else {
-				mockUnderkube.EXPECT().CreateService(gomock.Any(), virtualMachine.Namespace).Return(nil, tc.clientCreateServiceError).AnyTimes()
-			}
-
 			// TODO: test negative flow, return err != nil
 			mockOvernderkube.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			mockOvernderkube.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
@@ -653,10 +523,6 @@ func TestUpdate(t *testing.T) {
 				assert.Equal(t, err.Error(), "requeue in: 3m0s")
 			} else if !tc.wantVMToBeReady {
 				assert.Equal(t, err.Error(), "requeue in: 20s")
-			} else if tc.wantCreateServiceErr != "" {
-				assert.Equal(t, tc.wantCreateServiceErr, err.Error())
-			} else if tc.wantGetServiceErr != "" && tc.wantGetServiceErr != "service not found" {
-				assert.Equal(t, tc.wantGetServiceErr, err.Error())
 			} else {
 				assert.Equal(t, err, nil)
 				//providerID := fmt.Sprintf("kubevirt:///%s/%s", machineScope.machine.GetNamespace(), machineScope.virtualMachine.GetName())

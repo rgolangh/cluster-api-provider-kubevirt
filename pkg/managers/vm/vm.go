@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
@@ -78,14 +76,6 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 		return fmt.Errorf("failed to create virtual machine: %w", err)
 	}
 
-	_, err = m.createUnderkubeService(virtualMachineFromMachine.Name, virtualMachineFromMachine.Namespace, machineScope)
-	if err != nil {
-		klog.Errorf("%s: error creating machine: %v", machineScope.getMachineName(), err)
-		conditionFailed := conditionFailed()
-		conditionFailed.Message = err.Error()
-		return fmt.Errorf("failed to create service: %w", err)
-	}
-
 	klog.Infof("Created Machine %v", machineScope.getMachineName())
 
 	if err := m.syncMachine(createdVM, machineScope); err != nil {
@@ -115,8 +105,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 		// TODO ask Nir how to check it
 		if strings.Contains(err.Error(), "not found") {
 			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
-			return m.removeServiceIfNeeded(virtualMachineFromMachine, machineScope)
-
+			return nil
 		}
 
 		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), err)
@@ -125,38 +114,15 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 
 	if existingVM == nil {
 		klog.Warningf("%s: VM not found to delete for machine", machineScope.getMachineName())
-		return m.removeServiceIfNeeded(virtualMachineFromMachine, machineScope)
+		return nil
 	}
 
 	if err := m.deleteUnderkubeVM(existingVM.GetName(), existingVM.GetNamespace(), machineScope); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
 
-	if err := m.removeServiceIfNeeded(virtualMachineFromMachine, machineScope); err != nil {
-		return fmt.Errorf("failed to delete the service of VM: %w", err)
-	}
-
 	klog.Infof("Deleted machine %v", machineScope.getMachineName())
 
-	return nil
-}
-
-func (m *manager) removeServiceIfNeeded(virtualMachineFromMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) error {
-	service, err := m.getUnderkubeService(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			klog.Infof("%s: Service does not exist", machineScope.getMachineName())
-			return nil
-		}
-		klog.Errorf("%s: error getting service of VM: %v", machineScope.getMachineName(), err)
-		return err
-	}
-	if service != nil {
-		if err := m.deleteUnderkubeService(virtualMachineFromMachine.Name, virtualMachineFromMachine.Namespace, machineScope); err != nil {
-			return err
-		}
-	}
-	klog.Infof("Deleted service %v", machineScope.getMachineName())
 	return nil
 }
 
@@ -183,11 +149,6 @@ func (m *manager) Update(machine *machinev1.Machine) (wasUpdated bool, resultErr
 	}()
 
 	wasUpdated, updatedVM, err := m.updateVM(err, virtualMachineFromMachine, machineScope)
-	if err != nil {
-		return false, err
-	}
-
-	err = m.createServiceIfNeeded(err, updatedVM, machineScope, updatedVM, virtualMachineFromMachine)
 	if err != nil {
 		return false, err
 	}
@@ -236,32 +197,6 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 
 	wasUpdated := previousResourceVersion != currentResourceVersion
 	return wasUpdated, updatedVM, nil
-}
-
-func (m *manager) createServiceIfNeeded(err error, updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope, getUpdatedVM *kubevirtapiv1.VirtualMachine, virtualMachineFromMachine *kubevirtapiv1.VirtualMachine) error {
-	serviceWasFound := true
-	_, err = m.getUnderkubeService(updatedVM.GetName(), updatedVM.GetNamespace(), machineScope)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			klog.Infof("%s: service does not exist", machineScope.getMachineName())
-			serviceWasFound = false
-		} else {
-			return fmt.Errorf("%s: error getting service of VM: %v", machineScope.getMachineName(), err)
-		}
-
-	}
-	if serviceWasFound {
-		return nil
-	}
-	_, err = m.createUnderkubeService(virtualMachineFromMachine.Name, virtualMachineFromMachine.Namespace, machineScope)
-	if err != nil {
-		klog.Errorf("%s: error updating machine: %v", machineScope.getMachineName(), err)
-		conditionFailed := conditionFailed()
-		conditionFailed.Message = err.Error()
-		return fmt.Errorf("failed to create service: %w", err)
-	}
-
-	return nil
 }
 
 func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope *machineScope) error {
@@ -321,25 +256,6 @@ func (m *manager) deleteUnderkubeVM(vmName, vmNamespace string, machineScope *ma
 
 func (m *manager) updateUnderkubeVM(updatedVM *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
 	return machineScope.underkubeClient.UpdateVirtualMachine(updatedVM.Namespace, updatedVM)
-}
-
-func (m *manager) createUnderkubeService(vmName, namespace string, machineScope *machineScope) (*corev1.Service, error) {
-	service := &corev1.Service{}
-	service.Name = vmName
-	service.Spec = corev1.ServiceSpec{
-		ClusterIP: "None",
-		Selector:  map[string]string{"name": vmName},
-		Type:      corev1.ServiceTypeClusterIP,
-	}
-
-	return machineScope.underkubeClient.CreateService(service, namespace)
-}
-
-func (m *manager) deleteUnderkubeService(vmName, namespace string, machineScope *machineScope) error {
-	return machineScope.underkubeClient.DeleteService(vmName, namespace, &k8smetav1.DeleteOptions{})
-}
-func (m *manager) getUnderkubeService(vmName, namespace string, machineScope *machineScope) (*corev1.Service, error) {
-	return machineScope.underkubeClient.GetService(vmName, namespace, k8smetav1.GetOptions{})
 }
 
 // isMaster returns true if the machine is part of a cluster's control plane

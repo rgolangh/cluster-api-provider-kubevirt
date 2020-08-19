@@ -19,7 +19,6 @@ package underkube
 import (
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
-	corev1 "k8s.io/api/core/v1"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -53,10 +52,6 @@ type Client interface {
 	RestartVirtualMachine(namespace string, name string) error
 	StartVirtualMachine(namespace string, name string) error
 	StopVirtualMachine(namespace string, name string) error
-	CreateService(service *corev1.Service, namespace string) (*corev1.Service, error)
-	DeleteService(serviceName string, namespace string, options *k8smetav1.DeleteOptions) error
-	UpdateService(service *corev1.Service, namespace string) (*corev1.Service, error)
-	GetService(serviceName string, namespace string, options k8smetav1.GetOptions) (*corev1.Service, error)
 }
 
 type client struct {
@@ -149,20 +144,4 @@ func (c *client) StartVirtualMachine(namespace string, name string) error {
 
 func (c *client) StopVirtualMachine(namespace string, name string) error {
 	return c.kubevirtClient.VirtualMachine(namespace).Stop(name)
-}
-
-func (c *client) CreateService(service *corev1.Service, namespace string) (*corev1.Service, error) {
-	return c.kuberentesClient.CoreV1().Services(namespace).Create(service)
-}
-
-func (c *client) DeleteService(serviceName string, namespace string, options *k8smetav1.DeleteOptions) error {
-	return c.kuberentesClient.CoreV1().Services(namespace).Delete(serviceName, options)
-}
-
-func (c *client) UpdateService(service *corev1.Service, namespace string) (*corev1.Service, error) {
-	return c.kuberentesClient.CoreV1().Services(namespace).Update(service)
-}
-
-func (c *client) GetService(serviceName string, namespace string, options k8smetav1.GetOptions) (*corev1.Service, error) {
-	return c.kuberentesClient.CoreV1().Services(namespace).Get(serviceName, options)
 }
