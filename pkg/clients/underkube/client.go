@@ -31,14 +31,14 @@ import (
 //go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 
 const (
-	// underKubeConfig is secret key containing kubeconfig content of the UnderKube
-	underKubeConfig                       = "kubeconfig"
-	defaultUnderKubeconfigSecretName      = "kubevirt-credentials"
-	defaultUnderKubeconfigSecretNamespace = "openshift-machine-api"
+	// platformCredentialsKey is secret key containing kubeconfig content of the UnderKube
+	platformCredentialsKey                  = "kubeconfig"
+	defaultCredentialsSecretSecretName      = "kubevirt-credentials"
+	defaultCredentialsSecretSecretNamespace = "openshift-machine-api"
 )
 
 // ClientBuilderFuncType is function type for building underkube client
-type ClientBuilderFuncType func(overKubernetesClient overkube.Client, underKubeconfigSecretName, namespace string) (Client, error)
+type ClientBuilderFuncType func(overKubernetesClient overkube.Client, CredentialsSecretSecretName, namespace string) (Client, error)
 
 // Client is a wrapper object for actual underkube clients: kubernetes and the kubevirt
 type Client interface {
@@ -60,31 +60,31 @@ type client struct {
 }
 
 // New creates our client wrapper object for the actual kubeVirt and kubernetes clients we use.
-func New(overKubernetesClient overkube.Client, underKubeconfigSecretName, namespace string) (Client, error) {
-	underKubeconfigSecretNamespace := namespace
-	if underKubeconfigSecretName == "" {
-		underKubeconfigSecretName = defaultUnderKubeconfigSecretName
-		underKubeconfigSecretNamespace = defaultUnderKubeconfigSecretNamespace
+func New(overKubernetesClient overkube.Client, CredentialsSecretSecretName, namespace string) (Client, error) {
+	CredentialsSecretSecretNamespace := namespace
+	if CredentialsSecretSecretName == "" {
+		CredentialsSecretSecretName = defaultCredentialsSecretSecretName
+		CredentialsSecretSecretNamespace = defaultCredentialsSecretSecretNamespace
 	}
 
 	if namespace == "" {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret - Invalid empty namespace")
 	}
 
-	returnedSecret, err := overKubernetesClient.GetSecret(underKubeconfigSecretName, underKubeconfigSecretNamespace)
+	returnedSecret, err := overKubernetesClient.GetSecret(CredentialsSecretSecretName, CredentialsSecretSecretNamespace)
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
-			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", underKubeconfigSecretNamespace, underKubeconfigSecretName, err)
+			return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %s/%s: %v not found", CredentialsSecretSecretNamespace, CredentialsSecretSecretName, err)
 		}
 		return nil, err
 	}
-	underKubeConfig, ok := returnedSecret.Data[underKubeConfig]
+	platformCredentials, ok := returnedSecret.Data[platformCredentialsKey]
 	if !ok {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("Underkube credentials secret %v did not contain key %v",
-			underKubeconfigSecretName, underKubeConfig)
+			CredentialsSecretSecretName, platformCredentials)
 	}
 
-	clientConfig, err := clientcmd.NewClientConfigFromBytes(underKubeConfig)
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(platformCredentials)
 	if err != nil {
 		return nil, err
 	}

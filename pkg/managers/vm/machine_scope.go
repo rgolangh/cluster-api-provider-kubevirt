@@ -67,7 +67,7 @@ func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client,
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.UnderKubeconfigSecretName, machine.GetNamespace())
+	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}

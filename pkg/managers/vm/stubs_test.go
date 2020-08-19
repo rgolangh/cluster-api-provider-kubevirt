@@ -59,7 +59,7 @@ func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.UnderKubeconfigSecretName, machine.GetNamespace())
+	kubevirtClient, err := underkubeClientBuilder(overkubeClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -196,15 +196,15 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 
 	return &virtualMachine
 }
-func stubMachine(labels map[string]string, providerID string, useDefaultUnderKubeconfigSecretName bool) (*machinev1.Machine, error) {
+func stubMachine(labels map[string]string, providerID string, useDefaultCredentialsSecretName bool) (*machinev1.Machine, error) {
 	kubevirtMachineProviderSpec := &kubevirtproviderv1alpha1.KubevirtMachineProviderSpec{
-		SourcePvcName:             SourceTestPvcName,
-		IgnitionSecretName:        workerUserDataSecretName,
-		UnderKubeconfigSecretName: workerUserDataSecretName,
-		NetworkName:               NetworkName,
+		SourcePvcName:         SourceTestPvcName,
+		IgnitionSecretName:    workerUserDataSecretName,
+		CredentialsSecretName: workerUserDataSecretName,
+		NetworkName:           NetworkName,
 	}
-	if useDefaultUnderKubeconfigSecretName {
-		kubevirtMachineProviderSpec.UnderKubeconfigSecretName = ""
+	if useDefaultCredentialsSecretName {
+		kubevirtMachineProviderSpec.CredentialsSecretName = ""
 	}
 	providerSpecValue, providerSpecValueErr := kubevirtproviderv1alpha1.RawExtensionFromProviderSpec(kubevirtMachineProviderSpec)
 
