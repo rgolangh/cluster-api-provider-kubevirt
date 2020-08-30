@@ -41,6 +41,8 @@ const (
 	defaultBus                        = "virtio"
 	APIVersion                        = "kubevirt.io/v1alpha3"
 	Kind                              = "VirtualMachine"
+	mainNetworkName                   = "main"
+	podNetworkName                    = "pod-network"
 )
 
 type machineScope struct {
@@ -232,13 +234,13 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	}
 	template.Spec.Networks = []kubevirtapiv1.Network{
 		{
-			Name: "main",
+			Name: mainNetworkName,
 			NetworkSource: kubevirtapiv1.NetworkSource{
 				Multus: multusNetwork,
 			},
 		},
 		{
-			Name: "pod-network",
+			Name: podNetworkName,
 			NetworkSource: kubevirtapiv1.NetworkSource{
 				Pod: &kubevirtapiv1.PodNetwork{},
 			},
@@ -284,14 +286,13 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 		},
 		Interfaces: []kubevirtapiv1.Interface{
 			{
-				Name: "main",
+				Name: mainNetworkName,
 				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
 					Bridge: &kubevirtapiv1.InterfaceBridge{},
 				},
 			},
 			{
-				Name:  "pod-network",
-				Model: "",
+				Name: podNetworkName,
 				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
 					Masquerade: &kubevirtapiv1.InterfaceMasquerade{},
 				},
