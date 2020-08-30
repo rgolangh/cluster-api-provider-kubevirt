@@ -232,12 +232,20 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	multusNetwork := &kubevirtapiv1.MultusNetwork{
 		NetworkName: s.machineProviderSpec.NetworkName,
 	}
-	template.Spec.Networks = []kubevirtapiv1.Network{{
-		Name: "main",
-		NetworkSource: kubevirtapiv1.NetworkSource{
-			Multus: multusNetwork,
+	template.Spec.Networks = []kubevirtapiv1.Network{
+		{
+			Name: "main",
+			NetworkSource: kubevirtapiv1.NetworkSource{
+				Multus: multusNetwork,
+			},
 		},
-	}}
+		{
+			Name: "pod-network",
+			NetworkSource: kubevirtapiv1.NetworkSource{
+				Pod: &kubevirtapiv1.PodNetwork{},
+			},
+		},
+	}
 
 	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
 
@@ -276,12 +284,21 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 				},
 			},
 		},
-		Interfaces: []kubevirtapiv1.Interface{{
-			Name: "main",
-			InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
-				Bridge: &kubevirtapiv1.InterfaceBridge{},
+		Interfaces: []kubevirtapiv1.Interface{
+			{
+				Name: "main",
+				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
+					Bridge: &kubevirtapiv1.InterfaceBridge{},
+				},
 			},
-		}},
+			{
+				Name:  "pod-network",
+				Model: "",
+				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
+					Masquerade: &kubevirtapiv1.InterfaceMasquerade{},
+				},
+			},
+		},
 	}
 
 	return template, nil
