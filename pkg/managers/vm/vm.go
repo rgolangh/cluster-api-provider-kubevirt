@@ -219,7 +219,7 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 	}
 
 	klog.Infof("%s: check if machine exists", machineScope.getMachineName())
-	existingVM, err := m.getInraClusterVM(machine.GetName(), getVMNamespace(machine), machineScope)
+	existingVM, err := m.getInraClusterVM(machine.GetName(), machineScope.vmNamespace, machineScope)
 	if err != nil {
 		// TODO ask Nir how to check it
 		if strings.Contains(err.Error(), "not found") {

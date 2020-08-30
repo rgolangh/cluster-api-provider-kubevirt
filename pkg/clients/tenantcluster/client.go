@@ -19,6 +19,8 @@ package tenantcluster
 import (
 	"context"
 
+	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
+
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,12 +30,18 @@ import (
 )
 
 //go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
+const (
+	ConfigMapNamespace = "openshift-config"
+	ConfigMapName      = "cloud-provider-config"
+	ConfigMapKeyName   = "namespace"
+)
 
 // Client is a wrapper object for actual tenant-cluster clients: kubernetesClient and runtimeClient
 type Client interface {
 	PatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
 	StatusPatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
 	GetSecret(secretName string, namespace string) (*corev1.Secret, error)
+	GetNamespace() (string, error)
 }
 
 type kubeClient struct {
@@ -64,4 +72,16 @@ func (c *kubeClient) StatusPatchMachine(machine *machinev1.Machine, originMachin
 
 func (c *kubeClient) GetSecret(secretName string, namespace string) (*corev1.Secret, error) {
 	return c.kubernetesClient.CoreV1().Secrets(namespace).Get(secretName, k8smetav1.GetOptions{})
+}
+
+func (c *kubeClient) GetNamespace() (string, error) {
+	configMap, err := c.kubernetesClient.CoreV1().ConfigMaps(ConfigMapNamespace).Get(ConfigMapName, k8smetav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	vmNamespace, ok := configMap.Data[ConfigMapKeyName]
+	if !ok {
+		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: %v doesn't contain the key %s", ConfigMapNamespace, ConfigMapName, ConfigMapKeyName)
+	}
+	return vmNamespace, nil
 }

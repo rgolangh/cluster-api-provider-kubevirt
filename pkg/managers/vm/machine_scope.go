@@ -50,6 +50,7 @@ type machineScope struct {
 	originMachineCopy     *machinev1.Machine
 	machineProviderSpec   *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
 	machineProviderStatus *kubevirtproviderv1alpha1.KubevirtMachineProviderStatus
+	vmNamespace           string
 }
 
 func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantcluster.Client, infraClusterClientBuilder infracluster.ClientBuilderFuncType) (*machineScope, error) {
@@ -72,6 +73,11 @@ func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclust
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
+	vmNamespace, err := tenantClusterClient.GetNamespace()
+	if err != nil {
+		return nil, err
+	}
+
 	return &machineScope{
 		infraClusterClient:    infraClusterClient,
 		tenantClusterClient:   tenantClusterClient,
@@ -79,15 +85,10 @@ func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclust
 		originMachineCopy:     machine.DeepCopy(),
 		machineProviderSpec:   providerSpec,
 		machineProviderStatus: providerStatus,
+		vmNamespace:           vmNamespace,
 	}, nil
 }
-func getVMNamespace(machine *machinev1.Machine) string {
-	namespace, ok := getClusterID(machine)
-	if !ok {
-		namespace = machine.Namespace
-	}
-	return namespace
-}
+
 func (s *machineScope) assertMandatoryParams() error {
 	switch {
 	case s.machineProviderSpec.SourcePvcName == "":
@@ -105,11 +106,8 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 		return nil, err
 	}
 	runAlways := kubevirtapiv1.RunStrategyAlways
-	// use getClusterID as a namespace
-	// TODO: if there isnt a cluster id - need to return an error
-	namespace := getVMNamespace(s.machine)
 
-	vmiTemplate, err := s.buildVMITemplate(namespace)
+	vmiTemplate, err := s.buildVMITemplate(s.vmNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +121,7 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage),
 			},
 			Template: vmiTemplate,
 		},
@@ -133,7 +131,7 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 	virtualMachine.Kind = Kind
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:            s.machine.Name,
-		Namespace:       namespace,
+		Namespace:       s.vmNamespace,
 		Labels:          s.machine.Labels,
 		Annotations:     s.machine.Annotations,
 		OwnerReferences: nil,
