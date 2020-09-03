@@ -18,6 +18,7 @@ package tenantcluster
 
 import (
 	"context"
+	"encoding/json"
 
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
@@ -31,9 +32,10 @@ import (
 
 //go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 const (
-	ConfigMapNamespace = "openshift-config"
-	ConfigMapName      = "cloud-provider-config"
-	ConfigMapKeyName   = "namespace"
+	ConfigMapNamespace        = "openshift-config"
+	ConfigMapName             = "cloud-provider-config"
+	ConfigMapDataKeyName      = "config"
+	ConfigMapNamespaceKeyName = "namespace"
 )
 
 // Client is a wrapper object for actual tenant-cluster clients: kubernetesClient and runtimeClient
@@ -79,9 +81,17 @@ func (c *kubeClient) GetNamespace() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	vmNamespace, ok := configMap.Data[ConfigMapKeyName]
+	config, ok := configMap.Data[ConfigMapDataKeyName]
 	if !ok {
-		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: %v doesn't contain the key %s", ConfigMapNamespace, ConfigMapName, ConfigMapKeyName)
+		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s doesn't contain the key %s", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName)
+	}
+	var cMap map[string]string
+	if err := json.Unmarshal([]byte(config), &cMap); err != nil {
+		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: Data of key %s is not of type map[string]string", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName)
+	}
+	vmNamespace, ok := cMap[ConfigMapNamespaceKeyName]
+	if !ok {
+		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: The map extracted with key %s doesn't contain key %s", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName, ConfigMapNamespaceKeyName)
 	}
 	return vmNamespace, nil
 }
