@@ -80,6 +80,7 @@ func stubSecret() *corev1.Secret {
 	}
 	return &secret
 }
+
 func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
 	virtualMachineName := s.machine.GetName()
 
@@ -103,9 +104,7 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserDataSecretRef: &corev1.LocalObjectReference{
-						Name: s.machineProviderSpec.IgnitionSecretName,
-					},
+					UserData: userDataValue,
 				},
 			},
 		},

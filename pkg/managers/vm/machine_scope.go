@@ -200,11 +200,10 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName, "name": virtualMachineName},
 	}
 
-	// TODO: Use 'getUserData' after fixing the blocking port
-	//userData, err := s.getUserData(namespace)
-	//if err != nil {
-	//	return nil, err
-	//}
+	userData, err := s.getUserData(namespace)
+	if err != nil {
+		return nil, err
+	}
 
 	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
 	template.Spec.Volumes = []kubevirtapiv1.Volume{
@@ -220,11 +219,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserDataSecretRef: &corev1.LocalObjectReference{
-						Name: s.machineProviderSpec.IgnitionSecretName,
-					},
-					// TODO: Use UserData after fixing the blocking port
-					//UserData: userData,
+					UserData: userData,
 				},
 			},
 		},
