@@ -192,7 +192,7 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, storageClassName, defaultRequestedStorage),
+				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, storageClassName, defaultRequestedStorage, defaultPersistentVolumeAccessMode),
 			},
 			Template: vmiTemplate,
 		},

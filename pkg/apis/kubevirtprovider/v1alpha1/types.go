@@ -26,15 +26,16 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type KubevirtMachineProviderSpec struct {
-	metav1.TypeMeta       `json:",inline"`
-	SourcePvcName         string `json:"sourcePvcName,omitempty"`
-	CredentialsSecretName string `json:"credentialsSecretName,omitempty"`
-	RequestedMemory       string `json:"requestedMemory,omitempty"`
-	RequestedCPU          uint32 `json:"requestedCPU,omitempty"`
-	RequestedStorage      string `json:"requestedStorage,omitempty"`
-	StorageClassName      string `json:"storageClassName,omitempty"`
-	IgnitionSecretName    string `json:"ignitionSecretName,omitempty"`
-	NetworkName           string `json:"networkName,omitempty"`
+	metav1.TypeMeta            `json:",inline"`
+	SourcePvcName              string `json:"sourcePvcName,omitempty"`
+	CredentialsSecretName      string `json:"credentialsSecretName,omitempty"`
+	RequestedMemory            string `json:"requestedMemory,omitempty"`
+	RequestedCPU               uint32 `json:"requestedCPU,omitempty"`
+	RequestedStorage           string `json:"requestedStorage,omitempty"`
+	StorageClassName           string `json:"storageClassName,omitempty"`
+	IgnitionSecretName         string `json:"ignitionSecretName,omitempty"`
+	NetworkName                string `json:"networkName,omitempty"`
+	PersistentVolumeAccessMode string `json:"persistentVolumeAccessMode,omitempty"`
 }
 
 // KubevirtMachineProviderStatus is the type that will be embedded in a Machine.Status.ProviderStatus field.

@@ -32,7 +32,7 @@ const (
 const (
 	defaultRequestedMemory            = "2048M"
 	defaultRequestedStorage           = "35Gi"
-	defaultPersistentVolumeAccessMode = corev1.ReadWriteOnce
+	defaultPersistentVolumeAccessMode = corev1.ReadWriteMany
 	defaultDataVolumeDiskName         = "datavolumedisk1"
 	defaultCloudInitVolumeDiskName    = "cloudinitdisk"
 	defaultBootVolumeDiskName         = "bootvolume"
@@ -118,12 +118,27 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 	if pvcRequestsStorage == "" {
 		pvcRequestsStorage = defaultRequestedStorage
 	}
+	PVCAccessMode := defaultPersistentVolumeAccessMode
+	if s.machineProviderSpec.PersistentVolumeAccessMode != "" {
+		accessMode := corev1.PersistentVolumeAccessMode(s.machineProviderSpec.PersistentVolumeAccessMode)
+		switch accessMode {
+		case corev1.ReadWriteMany:
+			PVCAccessMode = corev1.ReadWriteMany
+		case corev1.ReadOnlyMany:
+			PVCAccessMode = corev1.ReadOnlyMany
+		case corev1.ReadWriteOnce:
+			PVCAccessMode = corev1.ReadWriteOnce
+		default:
+			return nil, machinecontroller.InvalidMachineConfiguration("%v: Value of PersistentVolumeAccessMode, can be only one of: %v, %v, %v",
+				s.machine.GetName(), corev1.ReadWriteMany, corev1.ReadOnlyMany, corev1.ReadWriteOnce)
+		}
+	}
 
 	virtualMachine := kubevirtapiv1.VirtualMachine{
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage, PVCAccessMode),
 			},
 			Template: vmiTemplate,
 		},
@@ -315,12 +330,11 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 	return userData, nil
 }
 
-func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName, pvcRequestsStorage string) *cdiv1.DataVolume {
+func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName, pvcRequestsStorage string, accessMode corev1.PersistentVolumeAccessMode) *cdiv1.DataVolume {
 
 	persistentVolumeClaimSpec := corev1.PersistentVolumeClaimSpec{
-		// TODO: Need to determine it by the type of storage class: pvc.Spec.StorageClassName
 		AccessModes: []corev1.PersistentVolumeAccessMode{
-			defaultPersistentVolumeAccessMode,
+			accessMode,
 		},
 		// TODO: Where to get it?? - add as a list
 		Resources: corev1.ResourceRequirements{
