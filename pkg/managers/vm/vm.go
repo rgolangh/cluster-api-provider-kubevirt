@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"

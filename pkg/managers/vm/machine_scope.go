@@ -8,9 +8,9 @@ import (
 
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
-	kubevirtproviderv1alpha1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	kubevirtproviderv1alpha1 "github.com/openshift/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"

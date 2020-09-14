@@ -10,10 +10,10 @@ import (
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
 	"github.com/golang/mock/gomock"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
-	mockInfraClusterClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster/mock"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
-	mockTenantClusterClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster/mock"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
+	mockInfraClusterClient "github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster/mock"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	mockTenantClusterClient "github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster/mock"
 	"gotest.tools/assert"
 )
 

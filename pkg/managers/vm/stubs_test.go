@@ -13,10 +13,10 @@ import (
 
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/infracluster"
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 
-	kubevirtproviderv1alpha1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
+	kubevirtproviderv1alpha1 "github.com/openshift/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

@@ -17,7 +17,7 @@ limitations under the License.
 package apis
 
 import (
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
 )
 
 func init() {

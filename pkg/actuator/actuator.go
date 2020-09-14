@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 
-	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/managers/vm"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/managers/vm"
 )
 
 const (
