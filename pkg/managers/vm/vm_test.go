@@ -19,6 +19,7 @@ import (
 
 const (
 	clusterNamespace = "kubevirt-actuator-cluster"
+	infraID          = "test-id-asdfg"
 )
 
 func initializeMachine(t *testing.T, labels map[string]string, providerID string, useDefaultCredentialsSecretName bool) *machinev1.Machine {
@@ -117,6 +118,7 @@ func TestCreate(t *testing.T) {
 			newMockTenantClusterClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return(clusterNamespace, nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
 			providerVMInstance := New(infraClusterClientMockBuilder, newMockTenantClusterClient)
 			err = providerVMInstance.Create(machine)
@@ -254,6 +256,7 @@ func TestDelete(t *testing.T) {
 			newMockTenantClusterClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return("kubevirt-actuator-cluster", nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
 			providerVMInstance := New(infraClusterClientMockBuilder, newMockTenantClusterClient)
 			err = providerVMInstance.Delete(machine)
@@ -353,6 +356,7 @@ func TestExists(t *testing.T) {
 			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return("kubevirt-actuator-cluster", nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
 			providerVMInstance := New(infraClusterClientMockBuilder, newMockTenantClusterClient)
 			existsVM, err := providerVMInstance.Exists(machine)
@@ -516,6 +520,7 @@ func TestUpdate(t *testing.T) {
 			newMockTenantClusterClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return("kubevirt-actuator-cluster", nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
 			providerVMInstance := New(infraClusterClientMockBuilder, newMockTenantClusterClient)
 			// TODO: test the bool wasUpdated

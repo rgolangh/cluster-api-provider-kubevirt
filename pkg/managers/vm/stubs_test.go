@@ -192,18 +192,21 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, storageClassName, defaultRequestedStorage, defaultPersistentVolumeAccessMode),
+				*buildBootVolumeDataVolumeTemplate(machineScope.machine.GetName(), machineScope.machineProviderSpec.SourcePvcName, namespace, storageClassName, defaultRequestedStorage, defaultPersistentVolumeAccessMode, map[string]string{"tenantcluster-test-id-asdfg-machine.openshift.io": "owned"}),
 			},
 			Template: vmiTemplate,
 		},
 	}
+
+	labels := machineScope.machine.Labels
+	labels["tenantcluster-test-id-asdfg-machine.openshift.io"] = "owned"
 
 	virtualMachine.APIVersion = APIVersion
 	virtualMachine.Kind = Kind
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:            machineScope.machine.Name,
 		Namespace:       namespace,
-		Labels:          machineScope.machine.Labels,
+		Labels:          labels,
 		Annotations:     machineScope.machine.Annotations,
 		OwnerReferences: nil,
 		ClusterName:     machineScope.machine.ClusterName,

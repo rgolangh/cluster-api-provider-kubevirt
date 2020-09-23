@@ -36,6 +36,7 @@ const (
 	ConfigMapName             = "cloud-provider-config"
 	ConfigMapDataKeyName      = "config"
 	ConfigMapNamespaceKeyName = "namespace"
+	ConfigMapInfraIDKeyName   = "infraID"
 )
 
 // Client is a wrapper object for actual tenant-cluster clients: kubernetesClient and runtimeClient
@@ -44,6 +45,7 @@ type Client interface {
 	StatusPatchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error
 	GetSecret(secretName string, namespace string) (*corev1.Secret, error)
 	GetNamespace() (string, error)
+	GetInfraID() (string, error)
 }
 
 type kubeClient struct {
@@ -76,22 +78,42 @@ func (c *kubeClient) GetSecret(secretName string, namespace string) (*corev1.Sec
 	return c.kubernetesClient.CoreV1().Secrets(namespace).Get(secretName, k8smetav1.GetOptions{})
 }
 
-func (c *kubeClient) GetNamespace() (string, error) {
-	configMap, err := c.kubernetesClient.CoreV1().ConfigMaps(ConfigMapNamespace).Get(ConfigMapName, k8smetav1.GetOptions{})
+func (c *kubeClient) GetInfraID() (string, error) {
+	cMap, err := c.getConfigMap()
 	if err != nil {
-		return "", err
+		return "", nil
 	}
-	config, ok := configMap.Data[ConfigMapDataKeyName]
+	infraID, ok := (*cMap)[ConfigMapInfraIDKeyName]
 	if !ok {
-		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s doesn't contain the key %s", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName)
+		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: The map extracted with key %s doesn't contain key %s", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName, ConfigMapInfraIDKeyName)
 	}
-	var cMap map[string]string
-	if err := json.Unmarshal([]byte(config), &cMap); err != nil {
-		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: Data of key %s is not of type map[string]string", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName)
+	return infraID, nil
+}
+
+func (c *kubeClient) GetNamespace() (string, error) {
+	cMap, err := c.getConfigMap()
+	if err != nil {
+		return "", nil
 	}
-	vmNamespace, ok := cMap[ConfigMapNamespaceKeyName]
+	vmNamespace, ok := (*cMap)[ConfigMapNamespaceKeyName]
 	if !ok {
 		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: The map extracted with key %s doesn't contain key %s", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName, ConfigMapNamespaceKeyName)
 	}
 	return vmNamespace, nil
+}
+
+func (c *kubeClient) getConfigMap() (*map[string]string, error) {
+	configMap, err := c.kubernetesClient.CoreV1().ConfigMaps(ConfigMapNamespace).Get(ConfigMapName, k8smetav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	config, ok := configMap.Data[ConfigMapDataKeyName]
+	if !ok {
+		return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s doesn't contain the key %s", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName)
+	}
+	var cMap map[string]string
+	if err := json.Unmarshal([]byte(config), &cMap); err != nil {
+		return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster configMap %s/%s: Data of key %s is not of type map[string]string", ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName)
+	}
+	return &cMap, nil
 }

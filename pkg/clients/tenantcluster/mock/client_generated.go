@@ -5,10 +5,11 @@
 package mock
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	v1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	v1 "k8s.io/api/core/v1"
-	reflect "reflect"
 )
 
 // MockClient is a mock of Client interface
@@ -90,4 +91,19 @@ func (m *MockClient) GetNamespace() (string, error) {
 func (mr *MockClientMockRecorder) GetNamespace() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNamespace", reflect.TypeOf((*MockClient)(nil).GetNamespace))
+}
+
+// GetInfraID mocks base method
+func (m *MockClient) GetInfraID() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInfraID")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInfraID indicates an expected call of GetInfraID
+func (mr *MockClientMockRecorder) GetInfraID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInfraID", reflect.TypeOf((*MockClient)(nil).GetInfraID))
 }
