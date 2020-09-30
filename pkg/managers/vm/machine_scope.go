@@ -11,6 +11,7 @@ import (
 	kubevirtproviderv1alpha1 "github.com/openshift/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/utils"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
@@ -53,6 +54,7 @@ type machineScope struct {
 	machineProviderSpec   *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
 	machineProviderStatus *kubevirtproviderv1alpha1.KubevirtMachineProviderStatus
 	vmNamespace           string
+	infraID               string
 }
 
 func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantcluster.Client, infraClusterClientBuilder infracluster.ClientBuilderFuncType) (*machineScope, error) {
@@ -79,6 +81,10 @@ func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclust
 	if err != nil {
 		return nil, err
 	}
+	infraID, err := tenantClusterClient.GetInfraID()
+	if err != nil {
+		return nil, err
+	}
 
 	return &machineScope{
 		infraClusterClient:    infraClusterClient,
@@ -88,6 +94,7 @@ func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclust
 		machineProviderSpec:   providerSpec,
 		machineProviderStatus: providerStatus,
 		vmNamespace:           vmNamespace,
+		infraID:               infraID,
 	}, nil
 }
 
@@ -138,10 +145,15 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage, PVCAccessMode),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage, PVCAccessMode, utils.BuildLabels(s.infraID)),
 			},
 			Template: vmiTemplate,
 		},
+	}
+
+	labels := utils.BuildLabels(s.infraID)
+	for k, v := range s.machine.Labels {
+		labels[k] = v
 	}
 
 	virtualMachine.APIVersion = APIVersion
@@ -149,7 +161,7 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:            s.machine.Name,
 		Namespace:       s.vmNamespace,
-		Labels:          s.machine.Labels,
+		Labels:          labels,
 		Annotations:     s.machine.Annotations,
 		OwnerReferences: nil,
 		ClusterName:     s.machine.ClusterName,
@@ -330,7 +342,8 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 	return userData, nil
 }
 
-func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName, pvcRequestsStorage string, accessMode corev1.PersistentVolumeAccessMode) *cdiv1.DataVolume {
+func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName,
+	pvcRequestsStorage string, accessMode corev1.PersistentVolumeAccessMode, labels map[string]string) *cdiv1.DataVolume {
 
 	persistentVolumeClaimSpec := corev1.PersistentVolumeClaimSpec{
 		AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -352,6 +365,7 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      buildBootVolumeName(virtualMachineName),
 			Namespace: dvNamespace,
+			Labels:    labels,
 		},
 		Spec: cdiv1.DataVolumeSpec{
 			Source: cdiv1.DataVolumeSource{
