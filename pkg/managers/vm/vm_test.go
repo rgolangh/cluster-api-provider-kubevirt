@@ -397,7 +397,7 @@ func TestUpdate(t *testing.T) {
 			clientUpdateVMError:    nil,
 			emptyGetVM:             false,
 			labels:                 nil,
-			providerID:             fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
+			providerID:             formatProviderID(defaultNamespace, mahcineName),
 			wantVMToBeReady:        true,
 		},
 		{
@@ -408,7 +408,7 @@ func TestUpdate(t *testing.T) {
 			clientUpdateVMError:             nil,
 			emptyGetVM:                      false,
 			labels:                          nil,
-			providerID:                      fmt.Sprintf("kubevirt:///%s/%s", defaultNamespace, mahcineName),
+			providerID:                      formatProviderID(defaultNamespace, mahcineName),
 			wantVMToBeReady:                 true,
 			useDefaultCredentialsSecretName: true,
 		},
@@ -538,7 +538,6 @@ func TestUpdate(t *testing.T) {
 				assert.Equal(t, err.Error(), "requeue in: 20s")
 			} else {
 				assert.Equal(t, err, nil)
-				//providerID := fmt.Sprintf("kubevirt:///%s/%s", machineScope.machine.GetNamespace(), machineScope.virtualMachine.GetName())
 				assert.Equal(t, *machine.Spec.ProviderID, tc.providerID)
 			}
 		})

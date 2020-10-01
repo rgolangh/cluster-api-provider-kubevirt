@@ -46,6 +46,8 @@ const (
 	podNetworkName                    = "pod-network"
 )
 
+const providerIDFormat = "kubevirt://%s/%s"
+
 type machineScope struct {
 	infraClusterClient    infracluster.Client
 	tenantClusterClient   tenantcluster.Client
@@ -186,7 +188,7 @@ func (s *machineScope) setProviderID(vm *kubevirtapiv1.VirtualMachine) {
 		return
 	}
 
-	providerID := fmt.Sprintf("kubevirt:///%s/%s", s.getMachineNamespace(), vm.GetName())
+	providerID := formatProviderID(s.getMachineNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
 		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", s.getMachineName(), *existingProviderID)
@@ -499,4 +501,8 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *
 // GetMachineName return the name of the provided Machine
 func GetMachineName(machine *machinev1.Machine) string {
 	return machine.GetName()
+}
+
+func formatProviderID(namespace, name string) string {
+	return fmt.Sprintf(providerIDFormat, namespace, name)
 }
