@@ -32,7 +32,7 @@ import (
 
 const (
 	// platformCredentialsKey is secret key containing kubeconfig content of the infra-cluster
-	platformCredentialsKey                  = "userData"
+	platformCredentialsKey                  = "kubeconfig"
 	defaultCredentialsSecretSecretName      = "kubevirt-credentials"
 	defaultCredentialsSecretSecretNamespace = "openshift-machine-api"
 )
