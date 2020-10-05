@@ -147,7 +147,7 @@ func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage, PVCAccessMode, utils.BuildLabels(s.infraID)),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, s.vmNamespace, s.machineProviderSpec.StorageClassName, pvcRequestsStorage, PVCAccessMode),
 			},
 			Template: vmiTemplate,
 		},
@@ -345,7 +345,7 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 }
 
 func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName,
-	pvcRequestsStorage string, accessMode corev1.PersistentVolumeAccessMode, labels map[string]string) *cdiv1.DataVolume {
+	pvcRequestsStorage string, accessMode corev1.PersistentVolumeAccessMode) *cdiv1.DataVolume {
 
 	persistentVolumeClaimSpec := corev1.PersistentVolumeClaimSpec{
 		AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -367,7 +367,6 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      buildBootVolumeName(virtualMachineName),
 			Namespace: dvNamespace,
-			Labels:    labels,
 		},
 		Spec: cdiv1.DataVolumeSpec{
 			Source: cdiv1.DataVolumeSource{
