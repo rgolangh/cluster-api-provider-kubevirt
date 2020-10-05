@@ -2,11 +2,11 @@ package vm
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
@@ -102,8 +102,7 @@ func (m *manager) Delete(machine *machinev1.Machine) error {
 
 	existingVM, err := m.getInraClusterVM(virtualMachineFromMachine.GetName(), virtualMachineFromMachine.GetNamespace(), machineScope)
 	if err != nil {
-		// TODO ask Nir how to check it
-		if strings.Contains(err.Error(), "not found") {
+		if errors.IsNotFound(err) {
 			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
 			return nil
 		}
@@ -221,8 +220,7 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 	klog.Infof("%s: check if machine exists", machineScope.getMachineName())
 	existingVM, err := m.getInraClusterVM(machine.GetName(), machineScope.vmNamespace, machineScope)
 	if err != nil {
-		// TODO ask Nir how to check it
-		if strings.Contains(err.Error(), "not found") {
+		if errors.IsNotFound(err) {
 			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
 			return false, nil
 		}
