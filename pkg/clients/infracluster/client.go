@@ -19,6 +19,7 @@ package infracluster
 import (
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
+	corev1 "k8s.io/api/core/v1"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -52,11 +53,12 @@ type Client interface {
 	RestartVirtualMachine(namespace string, name string) error
 	StartVirtualMachine(namespace string, name string) error
 	StopVirtualMachine(namespace string, name string) error
+	CreateSecret(namespace string, newSecret *corev1.Secret) (*corev1.Secret, error)
 }
 
 type client struct {
 	kubevirtClient   kubecli.KubevirtClient
-	kuberentesClient *kubernetes.Clientset
+	kubernetesClient *kubernetes.Clientset
 }
 
 // New creates our client wrapper object for the actual kubeVirt and kubernetes clients we use.
@@ -102,7 +104,7 @@ func New(tenantClusterKubernetesClient tenantcluster.Client, CredentialsSecretSe
 	}
 	return &client{
 		kubevirtClient:   kubevirtClient,
-		kuberentesClient: kubernetesClient,
+		kubernetesClient: kubernetesClient,
 	}, nil
 }
 
@@ -144,4 +146,8 @@ func (c *client) StartVirtualMachine(namespace string, name string) error {
 
 func (c *client) StopVirtualMachine(namespace string, name string) error {
 	return c.kubevirtClient.VirtualMachine(namespace).Stop(name)
+}
+
+func (c *client) CreateSecret(namespace string, newSecret *corev1.Secret) (*corev1.Secret, error) {
+	return c.kubernetesClient.CoreV1().Secrets(namespace).Create(newSecret)
 }

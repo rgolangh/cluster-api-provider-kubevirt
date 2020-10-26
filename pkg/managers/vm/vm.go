@@ -6,6 +6,7 @@ import (
 
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
@@ -50,6 +51,17 @@ func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
 	machineScope, err := newMachineScope(machine, m.tenantClusterClient, m.infraClusterClientBuilder)
 	if err != nil {
 		return err
+	}
+
+	secretFromMachine, err := machineScope.createIgnitionSecretFromMachine()
+	if err != nil {
+		return err
+	}
+	if _, err := m.createInfraClusterSecret(secretFromMachine, machineScope); err != nil {
+		klog.Errorf("%s: error creating ignition secret: %v", machineScope.getMachineName(), err)
+		conditionFailed := conditionFailed()
+		conditionFailed.Message = err.Error()
+		return fmt.Errorf("failed to create ignition secret: %w", err)
 	}
 
 	virtualMachineFromMachine, err := machineScope.createVirtualMachineFromMachine()
@@ -238,6 +250,10 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 
 func (m *manager) createInfraClusterVM(virtualMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {
 	return machineScope.infraClusterClient.CreateVirtualMachine(virtualMachine.Namespace, virtualMachine)
+}
+
+func (m *manager) createInfraClusterSecret(secret *corev1.Secret, machineScope *machineScope) (*corev1.Secret, error) {
+	return machineScope.infraClusterClient.CreateSecret(secret.Namespace, secret)
 }
 
 func (m *manager) getInraClusterVM(vmName, vmNamespace string, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {

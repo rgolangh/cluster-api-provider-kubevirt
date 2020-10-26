@@ -111,7 +111,9 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserData: userDataValueFull,
+					UserDataSecretRef: &corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-ignition", virtualMachineName),
+					},
 				},
 			},
 		},
@@ -176,6 +178,26 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 	}
 
 	return template
+}
+
+func stubIgnitionSecret(machineScope *machineScope) *corev1.Secret {
+	name := fmt.Sprintf("%s-ignition", machineScope.machine.Name)
+	namespace := machineScope.machine.Labels[machinev1.MachineClusterIDLabel]
+	labels := map[string]string{
+		"tenantcluster-test-id-asdfg-machine.openshift.io": "owned",
+	}
+	resultSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Data: map[string][]byte{
+			"userdata": []byte(userDataValueFull),
+		},
+	}
+
+	return resultSecret
 }
 
 func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachine {
