@@ -43,7 +43,6 @@ const (
 	APIVersion                        = "kubevirt.io/v1alpha3"
 	Kind                              = "VirtualMachine"
 	mainNetworkName                   = "main"
-	podNetworkName                    = "pod-network"
 )
 
 const providerIDFormat = "kubevirt://%s/%s"
@@ -263,12 +262,6 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 				Multus: multusNetwork,
 			},
 		},
-		{
-			Name: podNetworkName,
-			NetworkSource: kubevirtapiv1.NetworkSource{
-				Pod: &kubevirtapiv1.PodNetwork{},
-			},
-		},
 	}
 
 	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
@@ -313,12 +306,6 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 				Name: mainNetworkName,
 				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
 					Bridge: &kubevirtapiv1.InterfaceBridge{},
-				},
-			},
-			{
-				Name: podNetworkName,
-				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
-					Masquerade: &kubevirtapiv1.InterfaceMasquerade{},
 				},
 			},
 		},

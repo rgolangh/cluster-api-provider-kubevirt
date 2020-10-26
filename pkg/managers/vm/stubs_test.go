@@ -127,12 +127,6 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 				Multus: multusNetwork,
 			},
 		},
-		{
-			Name: podNetworkName,
-			NetworkSource: kubevirtapiv1.NetworkSource{
-				Pod: &kubevirtapiv1.PodNetwork{},
-			},
-		},
 	}
 
 	template.Spec.Domain = kubevirtapiv1.DomainSpec{}
@@ -176,12 +170,6 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 				Name: mainNetworkName,
 				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
 					Bridge: &kubevirtapiv1.InterfaceBridge{},
-				},
-			},
-			{
-				Name: podNetworkName,
-				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
-					Masquerade: &kubevirtapiv1.InterfaceMasquerade{},
 				},
 			},
 		},
