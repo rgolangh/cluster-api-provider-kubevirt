@@ -26,10 +26,17 @@ const (
 	mahcineName              = "machine-test"
 	clusterID                = "kubevirt-actuator-cluster"
 	clusterName              = "kubevirt-actuator-cluster"
-	userDataValue            = "123"
+	userDataValue            = "{\"key1\":\"value1\"}"
 	workerUserDataSecretName = "worker-user-data"
 	SourceTestPvcName        = "SourceTestPvcName"
 	NetworkName              = "multus-network"
+)
+
+var (
+	userDataValueFull = fmt.Sprintf(
+		"{\"key1\":\"value1\",\"storage\":{\"files\":[{\"contents\":{\"source\":\"data:,%s\"},\"filesystem\":\"root\",\"mode\":420,\"path\":\"/etc/hostname\"}]}}",
+		mahcineName,
+	)
 )
 
 func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineInstance, error) {
@@ -104,7 +111,7 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserData: userDataValue,
+					UserData: userDataValueFull,
 				},
 			},
 		},

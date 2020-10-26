@@ -17,6 +17,7 @@ limitations under the License.
 package vm
 
 import (
+	"encoding/json"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -150,4 +151,30 @@ func getClusterID(machine *machinev1.Machine) (string, bool) {
 		clusterID, ok = machine.Labels[upstreamMachineClusterIDLabel]
 	}
 	return clusterID, ok
+}
+
+func addHostnameToUserData(src []byte, hostname string) ([]byte, error) {
+	var dataMap map[string]interface{}
+	json.Unmarshal([]byte(src), &dataMap)
+	if _, ok := dataMap["storage"]; !ok {
+		dataMap["storage"] = map[string]interface{}{}
+	}
+	storage := (dataMap["storage"]).(map[string]interface{})
+	if _, ok := storage["files"]; !ok {
+		storage["files"] = []map[string]interface{}{}
+	}
+	newFile := map[string]interface{}{
+		"filesystem": "root",
+		"path":       "/etc/hostname",
+		"mode":       420,
+	}
+	newFile["contents"] = map[string]interface{}{
+		"source": fmt.Sprintf("data:,%s", hostname),
+	}
+	storage["files"] = append(storage["files"].([]map[string]interface{}), newFile)
+	result, err := json.Marshal(dataMap)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

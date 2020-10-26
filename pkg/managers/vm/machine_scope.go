@@ -229,7 +229,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName, "name": virtualMachineName},
 	}
 
-	userData, err := s.getUserData(namespace)
+	userData, err := s.getUserData(namespace, virtualMachineName)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +327,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	return template, nil
 }
 
-func (s *machineScope) getUserData(namespace string) (string, error) {
+func (s *machineScope) getUserData(namespace string, virtualMachineName string) (string, error) {
 	secretName := s.machineProviderSpec.IgnitionSecretName
 	userDataSecret, err := s.tenantClusterClient.GetSecret(secretName, s.machine.GetNamespace())
 	if err != nil {
@@ -340,7 +340,11 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 	if !ok {
 		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
 	}
-	userData := string(userDataByte)
+	fullUserData, err := addHostnameToUserData(userDataByte, virtualMachineName)
+	if err != nil {
+		return "", err
+	}
+	userData := string(fullUserData)
 	return userData, nil
 }
 
