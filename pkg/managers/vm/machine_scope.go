@@ -43,7 +43,6 @@ const (
 	APIVersion                        = "kubevirt.io/v1alpha3"
 	Kind                              = "VirtualMachine"
 	mainNetworkName                   = "main"
-	podNetworkName                    = "pod-network"
 )
 
 const providerIDFormat = "kubevirt://%s/%s"
@@ -112,6 +111,31 @@ func (s *machineScope) assertMandatoryParams() error {
 		return nil
 	}
 }
+
+func (s *machineScope) createIgnitionSecretFromMachine() (*corev1.Secret, error) {
+	virtualMachineName := s.machine.GetName()
+	ignitionSecretName := buildIgnitionSecretName(virtualMachineName)
+	namespace := s.vmNamespace
+	labels := utils.BuildLabels(s.infraID)
+	userData, err := s.getUserData(namespace, virtualMachineName)
+	if err != nil {
+		return nil, err
+	}
+
+	resultSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ignitionSecretName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Data: map[string][]byte{
+			"userdata": userData,
+		},
+	}
+
+	return resultSecret, nil
+}
+
 func (s *machineScope) createVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error) {
 	if err := s.assertMandatoryParams(); err != nil {
 		return nil, err
@@ -229,10 +253,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 		Labels: map[string]string{"kubevirt.io/vm": virtualMachineName, "name": virtualMachineName},
 	}
 
-	userData, err := s.getUserData(namespace)
-	if err != nil {
-		return nil, err
-	}
+	ignitionSecretName := buildIgnitionSecretName(virtualMachineName)
 
 	template.Spec = kubevirtapiv1.VirtualMachineInstanceSpec{}
 	template.Spec.Volumes = []kubevirtapiv1.Volume{
@@ -248,7 +269,9 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserData: userData,
+					UserDataSecretRef: &corev1.LocalObjectReference{
+						Name: ignitionSecretName,
+					},
 				},
 			},
 		},
@@ -261,12 +284,6 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 			Name: mainNetworkName,
 			NetworkSource: kubevirtapiv1.NetworkSource{
 				Multus: multusNetwork,
-			},
-		},
-		{
-			Name: podNetworkName,
-			NetworkSource: kubevirtapiv1.NetworkSource{
-				Pod: &kubevirtapiv1.PodNetwork{},
 			},
 		},
 	}
@@ -315,33 +332,34 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 					Bridge: &kubevirtapiv1.InterfaceBridge{},
 				},
 			},
-			{
-				Name: podNetworkName,
-				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
-					Masquerade: &kubevirtapiv1.InterfaceMasquerade{},
-				},
-			},
 		},
 	}
 
 	return template, nil
 }
 
-func (s *machineScope) getUserData(namespace string) (string, error) {
+func buildIgnitionSecretName(virtualMachineName string) string {
+	return fmt.Sprintf("%s-ignition", virtualMachineName)
+}
+
+func (s *machineScope) getUserData(namespace string, virtualMachineName string) ([]byte, error) {
 	secretName := s.machineProviderSpec.IgnitionSecretName
 	userDataSecret, err := s.tenantClusterClient.GetSecret(secretName, s.machine.GetNamespace())
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
-			return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v not found", namespace, secretName, err)
+			return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v not found", namespace, secretName, err)
 		}
-		return "", err
+		return nil, err
 	}
 	userDataByte, ok := userDataSecret.Data[userDataKey]
 	if !ok {
-		return "", machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
+		return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
 	}
-	userData := string(userDataByte)
-	return userData, nil
+	fullUserData, err := addHostnameToUserData(userDataByte, virtualMachineName)
+	if err != nil {
+		return nil, err
+	}
+	return fullUserData, nil
 }
 
 func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName,

@@ -26,10 +26,17 @@ const (
 	mahcineName              = "machine-test"
 	clusterID                = "kubevirt-actuator-cluster"
 	clusterName              = "kubevirt-actuator-cluster"
-	userDataValue            = "123"
+	userDataValue            = "{\"key1\":\"value1\"}"
 	workerUserDataSecretName = "worker-user-data"
 	SourceTestPvcName        = "SourceTestPvcName"
 	NetworkName              = "multus-network"
+)
+
+var (
+	userDataValueFull = fmt.Sprintf(
+		"{\"key1\":\"value1\",\"storage\":{\"files\":[{\"contents\":{\"source\":\"data:,%s\"},\"filesystem\":\"root\",\"mode\":420,\"path\":\"/etc/hostname\"}]}}",
+		mahcineName,
+	)
 )
 
 func stubVmi(vm *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachineInstance, error) {
@@ -104,7 +111,9 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 			Name: buildCloudInitVolumeDiskName(virtualMachineName),
 			VolumeSource: kubevirtapiv1.VolumeSource{
 				CloudInitConfigDrive: &kubevirtapiv1.CloudInitConfigDriveSource{
-					UserData: userDataValue,
+					UserDataSecretRef: &corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-ignition", virtualMachineName),
+					},
 				},
 			},
 		},
@@ -118,12 +127,6 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 			Name: mainNetworkName,
 			NetworkSource: kubevirtapiv1.NetworkSource{
 				Multus: multusNetwork,
-			},
-		},
-		{
-			Name: podNetworkName,
-			NetworkSource: kubevirtapiv1.NetworkSource{
-				Pod: &kubevirtapiv1.PodNetwork{},
 			},
 		},
 	}
@@ -171,16 +174,30 @@ func stubBuildVMITemplate(s *machineScope) *kubevirtapiv1.VirtualMachineInstance
 					Bridge: &kubevirtapiv1.InterfaceBridge{},
 				},
 			},
-			{
-				Name: podNetworkName,
-				InterfaceBindingMethod: kubevirtapiv1.InterfaceBindingMethod{
-					Masquerade: &kubevirtapiv1.InterfaceMasquerade{},
-				},
-			},
 		},
 	}
 
 	return template
+}
+
+func stubIgnitionSecret(machineScope *machineScope) *corev1.Secret {
+	name := fmt.Sprintf("%s-ignition", machineScope.machine.Name)
+	namespace := machineScope.machine.Labels[machinev1.MachineClusterIDLabel]
+	labels := map[string]string{
+		"tenantcluster-test-id-asdfg-machine.openshift.io": "owned",
+	}
+	resultSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Data: map[string][]byte{
+			"userdata": []byte(userDataValueFull),
+		},
+	}
+
+	return resultSecret
 }
 
 func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachine {

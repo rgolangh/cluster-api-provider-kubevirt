@@ -41,6 +41,7 @@ func TestCreate(t *testing.T) {
 		wantValidateMachineErr          string
 		wantCreateVMErr                 string
 		ClientCreateVMError             error
+		ClientCreateSecretError         error
 		labels                          map[string]string
 		providerID                      string
 		wantVMToBeReady                 bool
@@ -83,6 +84,14 @@ func TestCreate(t *testing.T) {
 			providerID:             "",
 			wantVMToBeReady:        true,
 		},
+		{
+			name:                    "Create Ignition Secret Error",
+			wantCreateVMErr:         "failed to create ignition secret: secret creation error",
+			ClientCreateSecretError: errors.New("secret creation error"),
+			labels:                  nil,
+			providerID:              "",
+			wantVMToBeReady:         true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,13 +113,16 @@ func TestCreate(t *testing.T) {
 				t.Fatalf("Unable to build virtual machine with error: %v", err)
 			}
 
+			ignitionSecret := stubIgnitionSecret(machineScope)
 			virtualMachine := stubVirtualMachine(machineScope)
 			vmi, _ := stubVmi(virtualMachine)
 
 			returnVM := stubVirtualMachine(machineScope)
+			returnSecret := stubIgnitionSecret(machineScope)
 			returnVM.Status.Ready = tc.wantVMToBeReady
 
 			// TODO: test negative flow, return err != nil
+			newMockInfraClusterClient.EXPECT().CreateSecret(clusterID, ignitionSecret).Return(returnSecret, tc.ClientCreateSecretError).AnyTimes()
 			newMockInfraClusterClient.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateVMError).AnyTimes()
 			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
