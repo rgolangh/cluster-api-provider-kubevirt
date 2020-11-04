@@ -93,26 +93,6 @@ func shouldUpdateCondition(newCondition, existingCondition *kubevirtapiv1.Virtua
 	return newCondition.Reason != existingCondition.Reason || newCondition.Message != existingCondition.Message
 }
 
-// The network info is saved in the vmi
-// extractNodeAddresses maps the instance information from Vmi to an array of NodeAddresses
-func extractNodeAddresses(vmi *kubevirtapiv1.VirtualMachineInstance) ([]corev1.NodeAddress, error) {
-	// Not clear if the order matters here, but we might as well indicate a sensible preference order
-
-	if vmi == nil {
-		return nil, fmt.Errorf("nil vmi passed to extractNodeAddresses")
-	}
-
-	addresses := []corev1.NodeAddress{}
-	interfaces := vmi.Status.Interfaces
-	for _, i := range interfaces {
-		if i.IP != "" {
-			addresses = append(addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: i.IP})
-		}
-	}
-
-	return addresses, nil
-}
-
 // TODO There is only one kind of VirtualMachineConditionType: VirtualMachineFailure
 //      How should report on success?
 //      Is Failure/false is good enough or need to add type to client-go?
