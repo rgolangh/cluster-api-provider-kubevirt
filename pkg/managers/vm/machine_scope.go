@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -494,16 +495,14 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *
 	// update nodeAddresses
 	networkAddresses = append(networkAddresses, corev1.NodeAddress{Address: vm.Name, Type: corev1.NodeInternalDNS})
 
-	// VMI might be nil while the vm is in creating state but the vmi wasn't created yet.
-	//For example when colning the VM's dv
-	if vmi != nil {
-		// Copy specific addresses - only node addresses.
-		addresses, err := extractNodeAddresses(vmi)
-		if err != nil {
-			klog.Errorf("%s: Error extracting vm IP addresses: %v", s.machine.GetName(), err)
-			return err
+	klog.V(5).Infof("using hostname %s to resolve addresses", vm.Name)
+	ips, err := net.LookupIP(vm.Name)
+	if err == nil {
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				networkAddresses = append(networkAddresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
+			}
 		}
-		networkAddresses = append(networkAddresses, addresses...)
 	}
 
 	klog.Infof("%s: finished calculating KubeVirt status", s.machine.GetName())
