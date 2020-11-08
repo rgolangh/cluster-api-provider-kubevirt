@@ -10,3 +10,5 @@ reviewers:
   - ravidbro
   - rgolangh                 
   - chenyosef
+component: "Cloud Compute"
+subcomponent: "kubevirt controllers"
