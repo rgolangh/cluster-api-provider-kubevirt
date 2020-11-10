@@ -17,7 +17,7 @@ LABEL   com.redhat.component="machine-api" \
         name="cluster-api-provider-kubevirt" \
         architecture="x86_64" \
         summary="cluster-api-provider-kubevirt" \
-        maintainer="TeamNir Argaman <nargaman@redhat.com>"
+        maintainer="Nir Argaman <nargaman@redhat.com>"
         
 WORKDIR /go/src/github.com/kubevirt/cluster-api-provider-kubevirt
 COPY . .
