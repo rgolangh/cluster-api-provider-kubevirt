@@ -21,7 +21,7 @@ LABEL   com.redhat.component="machine-api" \
         
 WORKDIR /go/src/github.com/kubevirt/cluster-api-provider-kubevirt
 COPY . .
-RUN make build
+RUN make build NO_DOCKER=1
 
 FROM registry.svc.ci.openshift.org/ocp/4.7:base
 COPY --from=builder /go/src/github.com/kubevirt/cluster-api-provider-kubevirt/bin/machine-controller-manager /
