@@ -27,7 +27,7 @@ endif
 
 VERSION     ?= $(shell git describe --always --abbrev=7)
 REPO_PATH   ?= github.com/openshift/cluster-api-provider-kubevirt
-LD_FLAGS    ?= -X $(REPO_PATH)/pkg/version.Raw=$(VERSION) -extldflags "-static"
+LD_FLAGS    ?= -X $(REPO_PATH)/pkg/version.Raw=$(VERSION)
 MUTABLE_TAG ?= latest
 IMAGE        = origin-kubevirt-machine-controllers
 
