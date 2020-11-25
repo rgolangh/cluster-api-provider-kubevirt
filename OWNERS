@@ -11,4 +11,4 @@ reviewers:
   - rgolangh                 
   - chenyosef
 component: "Cloud Compute"
-subcomponent: "kubevirt controllers"
+subcomponent: "KubeVirt Provider"
